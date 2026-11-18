@@ -1,13 +1,27 @@
 import type {
   AsnOrder,
+  BarcodeRule,
   BomItem,
   Customer,
+  LabelTemplate,
   MaterialSku,
+  PackagingSpec,
   Supplier,
   WarehouseBin,
   WarehouseKeeper,
   WmsState,
+  ZebraPrinterConfig,
 } from '../types/wms';
+
+export interface ZebraBrowserPrintDevice {
+  name: string;
+  deviceType?: string;
+  connection?: string;
+  uid?: string;
+  provider?: string;
+  manufacturer?: string;
+  version?: number;
+}
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -36,6 +50,7 @@ export const wmsApi = {
     }),
 
   inbound: (body: {
+    materialKey?: string;
     skuCode: string;
     lotNumber: string;
     dateCode: string;
@@ -148,6 +163,18 @@ export const wmsApi = {
       body: JSON.stringify(body),
     }),
 
+  updateMaterial: (originalKey: string, material: MaterialSku) =>
+    request<ApiResponse>('/api/wms/materials', {
+      method: 'PUT',
+      body: JSON.stringify({ originalKey, material }),
+    }),
+
+  deleteMaterial: (materialKey: string) =>
+    request<ApiResponse>('/api/wms/materials', {
+      method: 'DELETE',
+      body: JSON.stringify({ materialKey }),
+    }),
+
   addWorkOrder: (body: {
     workOrderId?: string;
     productCode: string;
@@ -176,10 +203,44 @@ export const wmsApi = {
       body: JSON.stringify(body),
     }),
 
+  updateWarehouse: (
+    code: string,
+    body: {
+      warehouseName: string;
+      warehouseType: string;
+      managerId: string;
+      address: string;
+      status?: 'ACTIVE' | 'MAINTENANCE';
+    }
+  ) =>
+    request<ApiResponse>(`/api/wms/warehouses/${encodeURIComponent(code)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  deleteWarehouse: (code: string) =>
+    request<ApiResponse>(`/api/wms/warehouses/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+    }),
+
   addBin: (body: WarehouseBin) =>
     request<ApiResponse>('/api/wms/bins', {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+
+  updateBin: (
+    binCode: string,
+    body: Omit<WarehouseBin, 'binCode'>
+  ) =>
+    request<ApiResponse>(`/api/wms/bins/${encodeURIComponent(binCode)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  deleteBin: (binCode: string) =>
+    request<ApiResponse>(`/api/wms/bins/${encodeURIComponent(binCode)}`, {
+      method: 'DELETE',
     }),
 
   addKeeper: (
@@ -190,16 +251,52 @@ export const wmsApi = {
       body: JSON.stringify(body),
     }),
 
+  updateKeeper: (
+    keeperId: string,
+    body: Omit<WarehouseKeeper, 'keeperId' | 'status'> & { status?: 'ACTIVE' | 'OFF_DUTY' }
+  ) =>
+    request<ApiResponse>(`/api/wms/keepers/${encodeURIComponent(keeperId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  deleteKeeper: (keeperId: string) =>
+    request<ApiResponse>(`/api/wms/keepers/${encodeURIComponent(keeperId)}`, {
+      method: 'DELETE',
+    }),
+
   addSupplier: (body: Supplier) =>
     request<ApiResponse>('/api/wms/suppliers', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
 
+  updateSupplier: (code: string, body: Omit<Supplier, 'supplierCode'>) =>
+    request<ApiResponse>(`/api/wms/suppliers/${encodeURIComponent(code)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  deleteSupplier: (code: string) =>
+    request<ApiResponse>(`/api/wms/suppliers/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+    }),
+
   addCustomer: (body: Customer) =>
     request<ApiResponse>('/api/wms/customers', {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+
+  updateCustomer: (code: string, body: Omit<Customer, 'customerCode'>) =>
+    request<ApiResponse>(`/api/wms/customers/${encodeURIComponent(code)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  deleteCustomer: (code: string) =>
+    request<ApiResponse>(`/api/wms/customers/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
     }),
 
   saveBom: (body: {
@@ -215,6 +312,11 @@ export const wmsApi = {
     request<ApiResponse>('/api/wms/boms', {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+
+  deleteBom: (bomId: string) =>
+    request<ApiResponse>(`/api/wms/boms/${encodeURIComponent(bomId)}`, {
+      method: 'DELETE',
     }),
 
   createAsn: (body: {
@@ -253,4 +355,128 @@ export const wmsApi = {
     request<ApiResponse>(`/api/wms/asns/${encodeURIComponent(asnNo)}/cancel`, {
       method: 'POST',
     }),
+
+  addPackagingSpec: (body: PackagingSpec) =>
+    request<ApiResponse<{ spec: PackagingSpec }>>('/api/wms/packaging-specs', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  updatePackagingSpec: (code: string, body: PackagingSpec) =>
+    request<ApiResponse<{ spec: PackagingSpec }>>(
+      `/api/wms/packaging-specs/${encodeURIComponent(code)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }
+    ),
+
+  deletePackagingSpec: (code: string) =>
+    request<ApiResponse>(`/api/wms/packaging-specs/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+    }),
+
+  saveBarcodeRule: (
+    body: Omit<BarcodeRule, 'ruleId' | 'supplierName'> & {
+      ruleId?: string;
+      supplierName?: string;
+    }
+  ) =>
+    request<ApiResponse<{ rule: BarcodeRule }>>('/api/wms/barcode-rules', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  deleteBarcodeRule: (ruleId: string) =>
+    request<ApiResponse>(`/api/wms/barcode-rules/${encodeURIComponent(ruleId)}`, {
+      method: 'DELETE',
+    }),
+
+  saveLabelTemplate: (
+    body: Omit<LabelTemplate, 'templateId'> & { templateId?: string }
+  ) =>
+    request<ApiResponse<{ template: LabelTemplate }>>('/api/wms/label-templates', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  deleteLabelTemplate: (templateId: string) =>
+    request<ApiResponse>(`/api/wms/label-templates/${encodeURIComponent(templateId)}`, {
+      method: 'DELETE',
+    }),
+
+  savePrinterConfig: (body: Partial<ZebraPrinterConfig>) =>
+    request<ApiResponse<{ printerConfig: ZebraPrinterConfig }>>('/api/wms/printer-config', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  testZplPrinter: (body: { host: string; port: number }) =>
+    request<{ ok: true; payload: { host: string; port: number; latencyMs: number } }>(
+      '/api/wms/print/zpl/test',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    ),
+
+  sendZplPrint: (body: { host: string; port: number; zpl: string }) =>
+    request<{ ok: true; payload: { host: string; port: number; bytesSent: number } }>(
+      '/api/wms/print/zpl',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    ),
 };
+
+export async function probeZebraBrowserPrint(
+  baseUrl: string
+): Promise<ZebraBrowserPrintDevice[]> {
+  const cleanBase = baseUrl.trim().replace(/\/+$/, '');
+  if (!cleanBase) {
+    throw new Error('请先填写本机 Zebra Browser Print 服务地址');
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+  try {
+    const res = await fetch(`${cleanBase}/available`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`Browser Print 服务返回异常状态 (${res.status})`);
+    }
+    const data = (await res.json()) as { printer?: ZebraBrowserPrintDevice[] } | ZebraBrowserPrintDevice[];
+    const list = Array.isArray(data) ? data : data.printer ?? [];
+    return list;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(
+        `探测超时：未在本机 ${cleanBase} 检测到 Zebra Browser Print 服务，请确认已启动本地客户端。`
+      );
+    }
+    throw new Error(
+      `无法连接本机 Zebra Browser Print (${cleanBase})：请先在操作台电脑安装并启动 Zebra Browser Print 客户端（默认监听 9100/9101）。`
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function sendZebraBrowserPrint(
+  baseUrl: string,
+  device: ZebraBrowserPrintDevice,
+  zpl: string
+): Promise<void> {
+  const cleanBase = baseUrl.trim().replace(/\/+$/, '');
+  const res = await fetch(`${cleanBase}/write`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+    body: JSON.stringify({ device, data: zpl }),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`Browser Print 下发失败 (${res.status}) ${txt}`);
+  }
+}

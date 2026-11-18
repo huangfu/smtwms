@@ -1,4 +1,14 @@
-import type { AsnStatus, MsdState, ReelItem, ReelStatus, TraceActionType, WorkOrderStatus } from '../types/wms';
+import type {
+  AsnStatus,
+  BomItemRole,
+  MaterialOwnershipType,
+  MsdState,
+  PackagingCarrierType,
+  ReelItem,
+  ReelStatus,
+  TraceActionType,
+  WorkOrderStatus,
+} from '../types/wms';
 
 export function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -6,6 +16,33 @@ export function formatTime(iso: string): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+export const OWNERSHIP_TYPE_LABEL: Record<
+  MaterialOwnershipType,
+  { label: string; short: string; toneClass: string }
+> = {
+  SELF_PURCHASED: { label: '本厂自购', short: '自购', toneClass: 'text-slate-700' },
+  CUSTOMER_CONSIGNED: { label: '客户客供', short: '客供', toneClass: 'text-sky-700' },
+  VMI_CONSIGNED: { label: 'VMI寄售', short: 'VMI', toneClass: 'text-amber-700' },
+};
+
+export const PACKAGING_CARRIER_LABEL: Record<PackagingCarrierType, string> = {
+  REEL: 'SMT 载带卷盘 (Reel)',
+  TRAY: 'JEDEC 托盘 (Tray)',
+  TUBE: '料管 (Tube)',
+  BAG_BOTTLE: '防潮袋/冷链瓶装',
+  CUT_TAPE: '剪带散料 (Cut Tape)',
+  BULK: '散装/整箱',
+};
+
+export const BOM_ROLE_LABEL: Record<
+  BomItemRole,
+  { label: string; toneClass: string }
+> = {
+  MAIN: { label: '通用主料', toneClass: 'text-slate-700' },
+  SPECIAL_MAIN: { label: '机型特料', toneClass: 'text-sky-700' },
+  SUBSTITUTE: { label: '替代料(代用)', toneClass: 'text-amber-700' },
+};
 
 export const ACTION_META: Record<
   TraceActionType,

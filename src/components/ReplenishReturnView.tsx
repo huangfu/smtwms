@@ -189,7 +189,7 @@ export function ReplenishReturnView({
                   >
                     {activeWos.map((w) => (
                       <option key={w.workOrderId} value={w.workOrderId}>
-                        {w.workOrderId} — {w.productName} ({w.lineName})
+                        {w.workOrderId} — {w.productName} ({w.customerName || '通用'} · {w.lineName})
                       </option>
                     ))}
                   </select>
@@ -197,7 +197,7 @@ export function ReplenishReturnView({
 
                 <div>
                   <label htmlFor="rep-reel" className="block text-xs font-medium text-slate-700">
-                    扫描或选择补料料盘 UID
+                    扫描或选择补料料盘 UID (自动校验客户发料准入)
                   </label>
                   <input
                     id="rep-reel"
@@ -210,7 +210,7 @@ export function ReplenishReturnView({
                   <datalist id="replenish-reel-options">
                     {availableReelsForReplenish.map((r) => (
                       <option key={r.reelId} value={r.reelId}>
-                        {r.mpn} | 余量 {r.qty} | {r.binCode}
+                        {r.mpn} | {r.customerCode ? `${r.customerName}专备` : '通用共享'} | 余量 {r.qty} | {r.binCode}
                       </option>
                     ))}
                   </datalist>
@@ -222,7 +222,7 @@ export function ReplenishReturnView({
                         onClick={() => setRepReelId(r.reelId)}
                         className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] text-slate-700 hover:bg-slate-100"
                       >
-                        {r.reelId} ({r.mpn})
+                        {r.reelId} ({r.mpn}{r.customerCode ? ` · ${r.customerCode}` : ''})
                       </button>
                     ))}
                   </div>

@@ -1,6 +1,6 @@
-import { Plus } from 'lucide-react';
+import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
-import type { WarehouseBin, WarehouseKeeper, WarehouseZone, WmsState } from '../types/wms';
+import type { Warehouse, WarehouseBin, WarehouseKeeper, WarehouseZone, WmsState } from '../types/wms';
 
 interface WarehouseMasterPanelProps {
   state: WmsState;
@@ -11,10 +11,28 @@ interface WarehouseMasterPanelProps {
     managerId: string;
     address: string;
   }) => Promise<void>;
+  onUpdateWarehouse: (
+    code: string,
+    payload: {
+      warehouseName: string;
+      warehouseType: string;
+      managerId: string;
+      address: string;
+      status?: 'ACTIVE' | 'MAINTENANCE';
+    }
+  ) => Promise<void>;
+  onDeleteWarehouse: (code: string) => Promise<void>;
   onAddBin: (payload: WarehouseBin) => Promise<void>;
+  onUpdateBin: (binCode: string, payload: Omit<WarehouseBin, 'binCode'>) => Promise<void>;
+  onDeleteBin: (binCode: string) => Promise<void>;
   onAddKeeper: (
     payload: Omit<WarehouseKeeper, 'keeperId' | 'status'> & { keeperId?: string }
   ) => Promise<void>;
+  onUpdateKeeper: (
+    keeperId: string,
+    payload: Omit<WarehouseKeeper, 'keeperId' | 'status'> & { status?: 'ACTIVE' | 'OFF_DUTY' }
+  ) => Promise<void>;
+  onDeleteKeeper: (keeperId: string) => Promise<void>;
 }
 
 const ZONES: WarehouseZone[] = [
@@ -29,19 +47,29 @@ const ZONES: WarehouseZone[] = [
 export function WarehouseMasterPanel({
   state,
   onAddWarehouse,
+  onUpdateWarehouse,
+  onDeleteWarehouse,
   onAddBin,
+  onUpdateBin,
+  onDeleteBin,
   onAddKeeper,
+  onUpdateKeeper,
+  onDeleteKeeper,
 }: WarehouseMasterPanelProps) {
   const [subSection, setSubSection] = useState<'warehouses' | 'bins' | 'keepers'>('warehouses');
 
-  // Add Warehouse form
+  // Warehouse form
+  const [editingWhCode, setEditingWhCode] = useState<string | null>(null);
+  const [confirmDeleteWhCode, setConfirmDeleteWhCode] = useState<string | null>(null);
   const [whCode, setWhCode] = useState('');
   const [whName, setWhName] = useState('');
   const [whType, setWhType] = useState('恒温防静电主仓 (22±3℃)');
   const [whManagerId, setWhManagerId] = useState(state.keepers[0]?.keeperId ?? '');
   const [whAddress, setWhAddress] = useState('');
 
-  // Add Bin form
+  // Bin form
+  const [editingBinCode, setEditingBinCode] = useState<string | null>(null);
+  const [confirmDeleteBinCode, setConfirmDeleteBinCode] = useState<string | null>(null);
   const [binCode, setBinCode] = useState('');
   const [binWarehouse, setBinWarehouse] = useState(
     state.warehouses[0]?.warehouseCode ?? 'WH-SMT-01'
@@ -52,7 +80,9 @@ export function WarehouseMasterPanel({
   const [binDesc, setBinDesc] = useState('');
   const [binFilterWh, setBinFilterWh] = useState('ALL');
 
-  // Add Keeper form
+  // Keeper form
+  const [editingKeeperId, setEditingKeeperId] = useState<string | null>(null);
+  const [confirmDeleteKeeperId, setConfirmDeleteKeeperId] = useState<string | null>(null);
   const [empNo, setEmpNo] = useState('');
   const [keeperName, setKeeperName] = useState('');
   const [keeperRole, setKeeperRole] = useState<WarehouseKeeper['role']>('收料仓管员');
@@ -63,25 +93,89 @@ export function WarehouseMasterPanel({
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const resetWhForm = () => {
+    setEditingWhCode(null);
+    setWhCode('');
+    setWhName('');
+    setWhType('恒温防静电主仓 (22±3℃)');
+    setWhManagerId(state.keepers[0]?.keeperId ?? '');
+    setWhAddress('');
+  };
+
+  const startEditWh = (wh: Warehouse) => {
+    setEditingWhCode(wh.warehouseCode);
+    setWhCode(wh.warehouseCode);
+    setWhName(wh.warehouseName);
+    setWhType(wh.warehouseType);
+    setWhManagerId(wh.managerId);
+    setWhAddress(wh.address);
+    setErr(null);
+    setMsg(null);
+  };
+
   const handleWhSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     setMsg(null);
     try {
-      await onAddWarehouse({
-        warehouseCode: whCode,
-        warehouseName: whName,
-        warehouseType: whType,
-        managerId: whManagerId,
-        address: whAddress,
-      });
-      setMsg(`已新增仓库 ${whName} (${whCode.toUpperCase()})`);
-      setWhCode('');
-      setWhName('');
-      setWhAddress('');
+      if (editingWhCode) {
+        await onUpdateWarehouse(editingWhCode, {
+          warehouseName: whName,
+          warehouseType: whType,
+          managerId: whManagerId,
+          address: whAddress,
+        });
+        setMsg(`已更新仓库 ${whName} (${editingWhCode})`);
+      } else {
+        await onAddWarehouse({
+          warehouseCode: whCode,
+          warehouseName: whName,
+          warehouseType: whType,
+          managerId: whManagerId,
+          address: whAddress,
+        });
+        setMsg(`已新增仓库 ${whName} (${whCode.toUpperCase()})`);
+      }
+      resetWhForm();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '新增仓库失败');
+      setErr(e instanceof Error ? e.message : '保存仓库失败');
     }
+  };
+
+  const handleConfirmDeleteWh = async (code: string) => {
+    setErr(null);
+    setMsg(null);
+    try {
+      await onDeleteWarehouse(code);
+      if (editingWhCode === code) resetWhForm();
+      setConfirmDeleteWhCode(null);
+      setMsg(`已删除仓库 ${code}`);
+    } catch (e) {
+      setConfirmDeleteWhCode(null);
+      setErr(e instanceof Error ? e.message : '删除仓库失败');
+    }
+  };
+
+  const resetBinForm = () => {
+    setEditingBinCode(null);
+    setBinCode('');
+    setBinWarehouse(state.warehouses[0]?.warehouseCode ?? 'WH-SMT-01');
+    setBinZone('电子料主库区');
+    setBinCap('30');
+    setBinKeeper(state.keepers[0]?.name ?? '张伟');
+    setBinDesc('');
+  };
+
+  const startEditBin = (b: WarehouseBin) => {
+    setEditingBinCode(b.binCode);
+    setBinCode(b.binCode);
+    setBinWarehouse(b.warehouseCode ?? state.warehouses[0]?.warehouseCode ?? 'WH-SMT-01');
+    setBinZone(b.zone);
+    setBinCap(String(b.capacityReels));
+    setBinKeeper(b.keeperName ?? state.keepers[0]?.name ?? '张伟');
+    setBinDesc(b.description);
+    setErr(null);
+    setMsg(null);
   };
 
   const handleBinSubmit = async (e: React.FormEvent) => {
@@ -89,20 +183,66 @@ export function WarehouseMasterPanel({
     setErr(null);
     setMsg(null);
     try {
-      await onAddBin({
-        binCode,
-        warehouseCode: binWarehouse,
-        zone: binZone,
-        capacityReels: Number(binCap) || 20,
-        keeperName: binKeeper,
-        description: binDesc || `${binZone} 标准储位`,
-      });
-      setMsg(`已新增库位 ${binCode.toUpperCase()}`);
-      setBinCode('');
-      setBinDesc('');
+      if (editingBinCode) {
+        await onUpdateBin(editingBinCode, {
+          warehouseCode: binWarehouse,
+          zone: binZone,
+          capacityReels: Number(binCap) || 20,
+          keeperName: binKeeper,
+          description: binDesc || `${binZone} 标准储位`,
+        });
+        setMsg(`已更新库位 ${editingBinCode}`);
+      } else {
+        await onAddBin({
+          binCode,
+          warehouseCode: binWarehouse,
+          zone: binZone,
+          capacityReels: Number(binCap) || 20,
+          keeperName: binKeeper,
+          description: binDesc || `${binZone} 标准储位`,
+        });
+        setMsg(`已新增库位 ${binCode.toUpperCase()}`);
+      }
+      resetBinForm();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '新增库位失败');
+      setErr(e instanceof Error ? e.message : '保存库位失败');
     }
+  };
+
+  const handleConfirmDeleteBin = async (code: string) => {
+    setErr(null);
+    setMsg(null);
+    try {
+      await onDeleteBin(code);
+      if (editingBinCode === code) resetBinForm();
+      setConfirmDeleteBinCode(null);
+      setMsg(`已删除库位 ${code}`);
+    } catch (e) {
+      setConfirmDeleteBinCode(null);
+      setErr(e instanceof Error ? e.message : '删除库位失败');
+    }
+  };
+
+  const resetKeeperForm = () => {
+    setEditingKeeperId(null);
+    setEmpNo('');
+    setKeeperName('');
+    setKeeperRole('收料仓管员');
+    setKeeperWh(state.warehouses[0]?.warehouseCode ?? 'WH-SMT-01');
+    setKeeperPhone('');
+    setKeeperShift('白班');
+  };
+
+  const startEditKeeper = (k: WarehouseKeeper) => {
+    setEditingKeeperId(k.keeperId);
+    setEmpNo(k.employeeNo);
+    setKeeperName(k.name);
+    setKeeperRole(k.role);
+    setKeeperWh(k.warehouseCode);
+    setKeeperPhone(k.phone);
+    setKeeperShift(k.shift);
+    setErr(null);
+    setMsg(null);
   };
 
   const handleKeeperSubmit = async (e: React.FormEvent) => {
@@ -110,20 +250,44 @@ export function WarehouseMasterPanel({
     setErr(null);
     setMsg(null);
     try {
-      await onAddKeeper({
-        employeeNo: empNo,
-        name: keeperName,
-        role: keeperRole,
-        warehouseCode: keeperWh,
-        phone: keeperPhone,
-        shift: keeperShift,
-      });
-      setMsg(`已新增仓库管理员 ${keeperName}`);
-      setEmpNo('');
-      setKeeperName('');
-      setKeeperPhone('');
+      if (editingKeeperId) {
+        await onUpdateKeeper(editingKeeperId, {
+          employeeNo: empNo,
+          name: keeperName,
+          role: keeperRole,
+          warehouseCode: keeperWh,
+          phone: keeperPhone,
+          shift: keeperShift,
+        });
+        setMsg(`已更新仓库管理员 ${keeperName}`);
+      } else {
+        await onAddKeeper({
+          employeeNo: empNo,
+          name: keeperName,
+          role: keeperRole,
+          warehouseCode: keeperWh,
+          phone: keeperPhone,
+          shift: keeperShift,
+        });
+        setMsg(`已新增仓库管理员 ${keeperName}`);
+      }
+      resetKeeperForm();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '新增管理员失败');
+      setErr(e instanceof Error ? e.message : '保存管理员失败');
+    }
+  };
+
+  const handleConfirmDeleteKeeper = async (k: WarehouseKeeper) => {
+    setErr(null);
+    setMsg(null);
+    try {
+      await onDeleteKeeper(k.keeperId);
+      if (editingKeeperId === k.keeperId) resetKeeperForm();
+      setConfirmDeleteKeeperId(null);
+      setMsg(`已删除管理员 ${k.name}`);
+    } catch (e) {
+      setConfirmDeleteKeeperId(null);
+      setErr(e instanceof Error ? e.message : '删除管理员失败');
     }
   };
 
@@ -161,9 +325,21 @@ export function WarehouseMasterPanel({
       {subSection === 'warehouses' && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
           <section className="rounded-lg border border-slate-200 bg-white p-5 xl:col-span-4">
-            <h2 className="border-b border-slate-200 pb-3 text-sm font-semibold text-slate-900">
-              新增仓库档案
-            </h2>
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h2 className="text-sm font-semibold text-slate-900">
+                {editingWhCode ? `修改仓库 (${editingWhCode})` : '新增仓库档案'}
+              </h2>
+              {editingWhCode && (
+                <button
+                  type="button"
+                  onClick={resetWhForm}
+                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600"
+                >
+                  <X className="h-3 w-3" />
+                  取消
+                </button>
+              )}
+            </div>
             <form onSubmit={handleWhSubmit} className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
@@ -174,10 +350,13 @@ export function WarehouseMasterPanel({
                     id="wh-code"
                     type="text"
                     required
+                    readOnly={Boolean(editingWhCode)}
                     value={whCode}
                     onChange={(e) => setWhCode(e.target.value)}
                     placeholder="WH-SMT-02"
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 font-mono text-xs"
+                    className={`mt-1 w-full rounded-md border px-2.5 py-1.5 font-mono text-xs ${
+                      editingWhCode ? 'border-slate-200 bg-slate-100 text-slate-500' : 'border-slate-300'
+                    }`}
                   />
                 </div>
                 <div>
@@ -239,7 +418,7 @@ export function WarehouseMasterPanel({
               </div>
 
               {err && (
-                <div className="rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
+                <div role="alert" className="rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
                   {err}
                 </div>
               )}
@@ -253,8 +432,8 @@ export function WarehouseMasterPanel({
                 type="submit"
                 className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
               >
-                <Plus className="h-3.5 w-3.5" />
-                保存仓库信息
+                {editingWhCode ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                {editingWhCode ? '保存仓库修改' : '保存仓库信息'}
               </button>
             </form>
           </section>
@@ -269,11 +448,12 @@ export function WarehouseMasterPanel({
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-5 py-2.5 font-medium whitespace-nowrap">仓库编码 / 名称</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">环境类型</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">仓库管理员</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">物理位置</th>
-                    <th className="px-5 py-2.5 font-medium text-right whitespace-nowrap">库位 / 在库盘数</th>
+                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">仓库编码 / 名称</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">环境类型</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">仓库管理员</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">物理位置</th>
+                    <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">库位 / 在库</th>
+                    <th className="px-4 py-2.5 font-medium text-right whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -286,19 +466,65 @@ export function WarehouseMasterPanel({
                         r.status !== 'DEPLETED' &&
                         r.status !== 'SCRAPPED'
                     ).length;
+                    const isConfirming = confirmDeleteWhCode === wh.warehouseCode;
                     return (
-                      <tr key={wh.warehouseCode} className="hover:bg-slate-50">
-                        <td className="px-5 py-3">
+                      <tr
+                        key={wh.warehouseCode}
+                        className={`hover:bg-slate-50 ${
+                          editingWhCode === wh.warehouseCode ? 'bg-sky-50/40' : ''
+                        }`}
+                      >
+                        <td className="px-4 py-3">
                           <div className="font-semibold text-slate-900">{wh.warehouseName}</div>
-                          <div className="font-mono text-[11px] text-slate-500">{wh.warehouseCode}</div>
+                          <div className="font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                            {wh.warehouseCode}
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{wh.warehouseType}</td>
-                        <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">
+                        <td className="px-3 py-3 text-slate-700">{wh.warehouseType}</td>
+                        <td className="px-3 py-3 font-medium text-slate-900 whitespace-nowrap">
                           {wh.managerName}
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{wh.address}</td>
-                        <td className="px-5 py-3 text-right font-mono tabular-nums whitespace-nowrap text-slate-700">
+                        <td className="px-3 py-3 text-slate-600">{wh.address}</td>
+                        <td className="px-3 py-3 text-right font-mono tabular-nums whitespace-nowrap text-slate-700">
                           {whBins.length} 位 · {reelCount} 盘
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {isConfirming ? (
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmDeleteWh(wh.warehouseCode)}
+                                className="rounded bg-red-600 px-2 py-0.5 text-[11px] font-medium text-white"
+                              >
+                                确认?
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteWhCode(null)}
+                                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-600"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => startEditWh(wh)}
+                                className="font-medium text-sky-700 hover:text-sky-900"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteWhCode(wh.warehouseCode)}
+                                aria-label={`删除仓库 ${wh.warehouseCode}`}
+                                className="text-slate-400 hover:text-red-600"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -313,9 +539,21 @@ export function WarehouseMasterPanel({
       {subSection === 'bins' && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
           <section className="rounded-lg border border-slate-200 bg-white p-5 xl:col-span-4">
-            <h2 className="border-b border-slate-200 pb-3 text-sm font-semibold text-slate-900">
-              新增库位储位
-            </h2>
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h2 className="text-sm font-semibold text-slate-900">
+                {editingBinCode ? `修改库位 (${editingBinCode})` : '新增库位储位'}
+              </h2>
+              {editingBinCode && (
+                <button
+                  type="button"
+                  onClick={resetBinForm}
+                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600"
+                >
+                  <X className="h-3 w-3" />
+                  取消
+                </button>
+              )}
+            </div>
             <form onSubmit={handleBinSubmit} className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
@@ -326,10 +564,13 @@ export function WarehouseMasterPanel({
                     id="b-code"
                     type="text"
                     required
+                    readOnly={Boolean(editingBinCode)}
                     value={binCode}
                     onChange={(e) => setBinCode(e.target.value)}
                     placeholder="C-01-01"
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 font-mono text-xs"
+                    className={`mt-1 w-full rounded-md border px-2.5 py-1.5 font-mono text-xs ${
+                      editingBinCode ? 'border-slate-200 bg-slate-100 text-slate-500' : 'border-slate-300'
+                    }`}
                   />
                 </div>
                 <div>
@@ -414,7 +655,7 @@ export function WarehouseMasterPanel({
               </div>
 
               {err && (
-                <div className="rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
+                <div role="alert" className="rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
                   {err}
                 </div>
               )}
@@ -428,8 +669,8 @@ export function WarehouseMasterPanel({
                 type="submit"
                 className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
               >
-                <Plus className="h-3.5 w-3.5" />
-                新增库位
+                {editingBinCode ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                {editingBinCode ? '保存库位修改' : '新增库位'}
               </button>
             </form>
           </section>
@@ -457,11 +698,12 @@ export function WarehouseMasterPanel({
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-5 py-2.5 font-medium whitespace-nowrap">库位编码</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">所属仓库 / 库区</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">责任管理员</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">说明</th>
-                    <th className="px-5 py-2.5 font-medium text-right whitespace-nowrap">占用 / 容量</th>
+                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">库位编码</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">所属仓库 / 库区</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">责任管理员</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">说明</th>
+                    <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">占用 / 容量</th>
+                    <th className="px-4 py-2.5 font-medium text-right whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -473,21 +715,65 @@ export function WarehouseMasterPanel({
                         r.status !== 'DEPLETED' &&
                         r.status !== 'SCRAPPED'
                     ).length;
+                    const isConfirming = confirmDeleteBinCode === b.binCode;
                     return (
-                      <tr key={b.binCode} className="hover:bg-slate-50">
-                        <td className="px-5 py-3 font-mono font-semibold text-slate-900 whitespace-nowrap">
+                      <tr
+                        key={b.binCode}
+                        className={`hover:bg-slate-50 ${
+                          editingBinCode === b.binCode ? 'bg-sky-50/40' : ''
+                        }`}
+                      >
+                        <td className="px-4 py-3 font-mono font-semibold text-slate-900 whitespace-nowrap">
                           {b.binCode}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           <div className="text-slate-900">{wh?.warehouseName ?? b.warehouseCode}</div>
                           <div className="text-[11px] text-slate-500">{b.zone}</div>
                         </td>
-                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
+                        <td className="px-3 py-3 text-slate-700 whitespace-nowrap">
                           {b.keeperName || wh?.managerName || '-'}
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{b.description}</td>
-                        <td className="px-5 py-3 text-right font-mono tabular-nums whitespace-nowrap text-slate-800">
+                        <td className="px-3 py-3 text-slate-600">{b.description}</td>
+                        <td className="px-3 py-3 text-right font-mono tabular-nums whitespace-nowrap text-slate-800">
                           {used} / {b.capacityReels} 盘
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {isConfirming ? (
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmDeleteBin(b.binCode)}
+                                className="rounded bg-red-600 px-2 py-0.5 text-[11px] font-medium text-white"
+                              >
+                                确认?
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteBinCode(null)}
+                                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-600"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => startEditBin(b)}
+                                className="font-medium text-sky-700 hover:text-sky-900"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteBinCode(b.binCode)}
+                                aria-label={`删除库位 ${b.binCode}`}
+                                className="text-slate-400 hover:text-red-600"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -502,9 +788,21 @@ export function WarehouseMasterPanel({
       {subSection === 'keepers' && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
           <section className="rounded-lg border border-slate-200 bg-white p-5 xl:col-span-4">
-            <h2 className="border-b border-slate-200 pb-3 text-sm font-semibold text-slate-900">
-              新增仓库管理员 / 作业员
-            </h2>
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h2 className="text-sm font-semibold text-slate-900">
+                {editingKeeperId ? `修改管理员 (${editingKeeperId})` : '新增仓库管理员 / 作业员'}
+              </h2>
+              {editingKeeperId && (
+                <button
+                  type="button"
+                  onClick={resetKeeperForm}
+                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600"
+                >
+                  <X className="h-3 w-3" />
+                  取消
+                </button>
+              )}
+            </div>
             <form onSubmit={handleKeeperSubmit} className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
@@ -602,7 +900,7 @@ export function WarehouseMasterPanel({
               </div>
 
               {err && (
-                <div className="rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
+                <div role="alert" className="rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
                   {err}
                 </div>
               )}
@@ -616,8 +914,8 @@ export function WarehouseMasterPanel({
                 type="submit"
                 className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
               >
-                <Plus className="h-3.5 w-3.5" />
-                保存管理员档案
+                {editingKeeperId ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                {editingKeeperId ? '保存管理员修改' : '保存管理员档案'}
               </button>
             </form>
           </section>
@@ -632,29 +930,74 @@ export function WarehouseMasterPanel({
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-5 py-2.5 font-medium whitespace-nowrap">工号 / 姓名</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">岗位角色</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">主责仓库</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">班次</th>
-                    <th className="px-5 py-2.5 font-medium whitespace-nowrap">联系电话</th>
+                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">工号 / 姓名</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">岗位角色</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">主责仓库</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">班次</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">联系电话</th>
+                    <th className="px-4 py-2.5 font-medium text-right whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {state.keepers.map((k) => {
                     const wh = state.warehouses.find((w) => w.warehouseCode === k.warehouseCode);
+                    const isConfirming = confirmDeleteKeeperId === k.keeperId;
                     return (
-                      <tr key={k.keeperId} className="hover:bg-slate-50">
-                        <td className="px-5 py-3">
+                      <tr
+                        key={k.keeperId}
+                        className={`hover:bg-slate-50 ${
+                          editingKeeperId === k.keeperId ? 'bg-sky-50/40' : ''
+                        }`}
+                      >
+                        <td className="px-4 py-3">
                           <div className="font-semibold text-slate-900">{k.name}</div>
                           <div className="font-mono text-[11px] text-slate-500">{k.employeeNo}</div>
                         </td>
-                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{k.role}</td>
-                        <td className="px-4 py-3 text-slate-700">
+                        <td className="px-3 py-3 text-slate-700 whitespace-nowrap">{k.role}</td>
+                        <td className="px-3 py-3 text-slate-700">
                           {wh?.warehouseName ?? k.warehouseCode}
                         </td>
-                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{k.shift}</td>
-                        <td className="px-5 py-3 font-mono text-slate-600 whitespace-nowrap">
+                        <td className="px-3 py-3 text-slate-600 whitespace-nowrap">{k.shift}</td>
+                        <td className="px-3 py-3 font-mono text-slate-600 whitespace-nowrap">
                           {k.phone}
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {isConfirming ? (
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmDeleteKeeper(k)}
+                                className="rounded bg-red-600 px-2 py-0.5 text-[11px] font-medium text-white"
+                              >
+                                确认?
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteKeeperId(null)}
+                                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-600"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => startEditKeeper(k)}
+                                className="font-medium text-sky-700 hover:text-sky-900"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteKeeperId(k.keeperId)}
+                                aria-label={`删除管理员 ${k.keeperId}`}
+                                className="text-slate-400 hover:text-red-600"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );

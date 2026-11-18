@@ -1,9 +1,12 @@
 import { Barcode, Flame } from 'lucide-react';
 import { useState } from 'react';
 import type {
+  BarcodeRule,
   BomItem,
   Customer,
+  LabelTemplate,
   MaterialSku,
+  PackagingSpec,
   ReelItem,
   Supplier,
   WarehouseBin,
@@ -12,10 +15,13 @@ import type {
 } from '../types/wms';
 import {
   MSD_STATE_LABEL,
+  OWNERSHIP_TYPE_LABEL,
   REEL_STATUS_LABEL,
   WORK_ORDER_STATUS_LABEL,
 } from '../utils/formatters';
-import { MaterialBomPanel } from './MaterialBomPanel';
+import { BarcodeTemplatePanel } from './BarcodeTemplatePanel';
+import { MaterialCatalogPanel } from './MaterialCatalogPanel';
+import { PackagingMasterPanel } from './PackagingMasterPanel';
 import { PartnerMasterPanel } from './PartnerMasterPanel';
 import { WarehouseMasterPanel } from './WarehouseMasterPanel';
 
@@ -25,15 +31,22 @@ interface InventoryMasterViewProps {
   onInspectTrace: (query: string) => void;
   onBakeMsd: (reelId: string) => Promise<void>;
   onAddMaterial: (mat: MaterialSku) => Promise<void>;
-  onSaveBom: (payload: {
-    bomId?: string;
-    productCode: string;
-    productName: string;
-    version: string;
-    customerCode?: string;
-    processType: string;
-    items: BomItem[];
-  }) => Promise<void>;
+  onUpdateMaterial: (originalKey: string, mat: MaterialSku) => Promise<void>;
+  onDeleteMaterial: (materialKey: string) => Promise<void>;
+  onAddPackagingSpec: (spec: PackagingSpec) => Promise<void>;
+  onUpdatePackagingSpec: (code: string, spec: PackagingSpec) => Promise<void>;
+  onDeletePackagingSpec: (code: string) => Promise<void>;
+  onSaveBarcodeRule: (
+    rule: Omit<BarcodeRule, 'ruleId' | 'supplierName'> & {
+      ruleId?: string;
+      supplierName?: string;
+    }
+  ) => Promise<void>;
+  onDeleteBarcodeRule: (ruleId: string) => Promise<void>;
+  onSaveLabelTemplate: (
+    tpl: Omit<LabelTemplate, 'templateId'> & { templateId?: string }
+  ) => Promise<void>;
+  onDeleteLabelTemplate: (templateId: string) => Promise<void>;
   onAddWarehouse: (payload: {
     warehouseCode: string;
     warehouseName: string;
@@ -41,12 +54,34 @@ interface InventoryMasterViewProps {
     managerId: string;
     address: string;
   }) => Promise<void>;
+  onUpdateWarehouse: (
+    code: string,
+    payload: {
+      warehouseName: string;
+      warehouseType: string;
+      managerId: string;
+      address: string;
+      status?: 'ACTIVE' | 'MAINTENANCE';
+    }
+  ) => Promise<void>;
+  onDeleteWarehouse: (code: string) => Promise<void>;
   onAddBin: (payload: WarehouseBin) => Promise<void>;
+  onUpdateBin: (binCode: string, payload: Omit<WarehouseBin, 'binCode'>) => Promise<void>;
+  onDeleteBin: (binCode: string) => Promise<void>;
   onAddKeeper: (
     payload: Omit<WarehouseKeeper, 'keeperId' | 'status'> & { keeperId?: string }
   ) => Promise<void>;
+  onUpdateKeeper: (
+    keeperId: string,
+    payload: Omit<WarehouseKeeper, 'keeperId' | 'status'> & { status?: 'ACTIVE' | 'OFF_DUTY' }
+  ) => Promise<void>;
+  onDeleteKeeper: (keeperId: string) => Promise<void>;
   onAddSupplier: (payload: Supplier) => Promise<void>;
+  onUpdateSupplier: (code: string, payload: Omit<Supplier, 'supplierCode'>) => Promise<void>;
+  onDeleteSupplier: (code: string) => Promise<void>;
   onAddCustomer: (payload: Customer) => Promise<void>;
+  onUpdateCustomer: (code: string, payload: Omit<Customer, 'customerCode'>) => Promise<void>;
+  onDeleteCustomer: (code: string) => Promise<void>;
   onAddWorkOrder: (wo: {
     workOrderId?: string;
     productCode: string;
@@ -65,15 +100,41 @@ export function InventoryMasterView({
   onInspectTrace,
   onBakeMsd,
   onAddMaterial,
-  onSaveBom,
+  onUpdateMaterial,
+  onDeleteMaterial,
+  onAddPackagingSpec,
+  onUpdatePackagingSpec,
+  onDeletePackagingSpec,
+  onSaveBarcodeRule,
+  onDeleteBarcodeRule,
+  onSaveLabelTemplate,
+  onDeleteLabelTemplate,
   onAddWarehouse,
+  onUpdateWarehouse,
+  onDeleteWarehouse,
   onAddBin,
+  onUpdateBin,
+  onDeleteBin,
   onAddKeeper,
+  onUpdateKeeper,
+  onDeleteKeeper,
   onAddSupplier,
+  onUpdateSupplier,
+  onDeleteSupplier,
   onAddCustomer,
+  onUpdateCustomer,
+  onDeleteCustomer,
   onAddWorkOrder,
 }: InventoryMasterViewProps) {
-  const [tab, setTab] = useState<'reels' | 'warehouse' | 'partners' | 'bom' | 'workOrders'>('reels');
+  const [tab, setTab] = useState<
+    | 'reels'
+    | 'materials'
+    | 'packaging'
+    | 'barcodeRules'
+    | 'warehouse'
+    | 'partners'
+    | 'workOrders'
+  >('reels');
   const [filterText, setFilterText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
@@ -101,7 +162,9 @@ export function InventoryMasterView({
       r.reelId.toUpperCase().includes(q) ||
       r.mpn.toUpperCase().includes(q) ||
       r.lotNumber.toUpperCase().includes(q) ||
-      r.binCode.toUpperCase().includes(q)
+      r.binCode.toUpperCase().includes(q) ||
+      (r.ownerName ?? '').toUpperCase().includes(q) ||
+      (r.customerName ?? '').toUpperCase().includes(q)
     );
   });
 
@@ -112,7 +175,11 @@ export function InventoryMasterView({
     setProductCode(bom.productCode);
     setProductName(bom.productName);
     if (bom.customerCode) setCustomerCode(bom.customerCode);
-    setBomDraft(bom.items.map((item) => ({ ...item })));
+    setBomDraft(
+      bom.items
+        .filter((item) => item.itemRole !== 'SUBSTITUTE')
+        .map((item) => ({ ...item }))
+    );
   };
 
   const handleAddBomRow = () => {
@@ -156,9 +223,11 @@ export function InventoryMasterView({
       <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-slate-200/70 p-1">
         {[
           { id: 'reels', label: '料盘库存台账 (UID明细)' },
+          { id: 'materials', label: '物料与产权归属清单' },
+          { id: 'packaging', label: '包装方式与 SPQ' },
+          { id: 'barcodeRules', label: '条码规则与标签模板' },
           { id: 'warehouse', label: '仓库 / 库位 / 管理员' },
           { id: 'partners', label: '供应商与客户管理' },
-          { id: 'bom', label: '物料与BOM清单管理' },
           { id: 'workOrders', label: '生产工单管理' },
         ].map((item) => (
           <button
@@ -223,10 +292,15 @@ export function InventoryMasterView({
                 {filteredReels.map((r) => {
                   const st = REEL_STATUS_LABEL[r.status];
                   const msd = MSD_STATE_LABEL[r.msdState];
+                  const own = OWNERSHIP_TYPE_LABEL[r.ownershipType ?? 'SELF_PURCHASED'];
                   return (
                     <tr key={r.reelId} className="hover:bg-slate-50">
                       <td className="px-5 py-3 font-mono font-semibold text-slate-900 whitespace-nowrap">
-                        {r.reelId}
+                        <div>{r.reelId}</div>
+                        <div className={`text-[10px] font-sans ${own.toneClass}`}>
+                          {own.short} · {r.ownerName || '本厂自购'}
+                          {r.customerCode ? ` · 限[${r.customerName || r.customerCode}]` : ' · 通用共享'}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-mono font-medium text-slate-900">{r.mpn}</div>
@@ -285,12 +359,46 @@ export function InventoryMasterView({
         </section>
       )}
 
+      {tab === 'materials' && (
+        <MaterialCatalogPanel
+          state={state}
+          onAddMaterial={onAddMaterial}
+          onUpdateMaterial={onUpdateMaterial}
+          onDeleteMaterial={onDeleteMaterial}
+        />
+      )}
+
+      {tab === 'packaging' && (
+        <PackagingMasterPanel
+          state={state}
+          onAddPackagingSpec={onAddPackagingSpec}
+          onUpdatePackagingSpec={onUpdatePackagingSpec}
+          onDeletePackagingSpec={onDeletePackagingSpec}
+        />
+      )}
+
+      {tab === 'barcodeRules' && (
+        <BarcodeTemplatePanel
+          state={state}
+          onSaveBarcodeRule={onSaveBarcodeRule}
+          onDeleteBarcodeRule={onDeleteBarcodeRule}
+          onSaveLabelTemplate={onSaveLabelTemplate}
+          onDeleteLabelTemplate={onDeleteLabelTemplate}
+        />
+      )}
+
       {tab === 'warehouse' && (
         <WarehouseMasterPanel
           state={state}
           onAddWarehouse={onAddWarehouse}
+          onUpdateWarehouse={onUpdateWarehouse}
+          onDeleteWarehouse={onDeleteWarehouse}
           onAddBin={onAddBin}
+          onUpdateBin={onUpdateBin}
+          onDeleteBin={onDeleteBin}
           onAddKeeper={onAddKeeper}
+          onUpdateKeeper={onUpdateKeeper}
+          onDeleteKeeper={onDeleteKeeper}
         />
       )}
 
@@ -298,15 +406,11 @@ export function InventoryMasterView({
         <PartnerMasterPanel
           state={state}
           onAddSupplier={onAddSupplier}
+          onUpdateSupplier={onUpdateSupplier}
+          onDeleteSupplier={onDeleteSupplier}
           onAddCustomer={onAddCustomer}
-        />
-      )}
-
-      {tab === 'bom' && (
-        <MaterialBomPanel
-          state={state}
-          onAddMaterial={onAddMaterial}
-          onSaveBom={onSaveBom}
+          onUpdateCustomer={onUpdateCustomer}
+          onDeleteCustomer={onDeleteCustomer}
         />
       )}
 

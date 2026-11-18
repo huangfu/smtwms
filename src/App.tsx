@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BarcodeLabelModal } from './components/BarcodeLabelModal';
+import { BomMasterView } from './components/BomMasterView';
 import { DashboardView } from './components/DashboardView';
 import { InboundView } from './components/InboundView';
 import { InventoryMasterView } from './components/InventoryMasterView';
@@ -219,6 +220,20 @@ export default function App() {
               />
             )}
 
+            {activeNav === 'bom' && (
+              <BomMasterView
+                state={state}
+                onSaveBom={async (bom) => {
+                  const res = await wmsApi.saveBom(bom);
+                  setState(res.state);
+                }}
+                onDeleteBom={async (bomId) => {
+                  const res = await wmsApi.deleteBom(bomId);
+                  setState(res.state);
+                }}
+              />
+            )}
+
             {activeNav === 'master' && (
               <InventoryMasterView
                 state={state}
@@ -229,28 +244,100 @@ export default function App() {
                   const res = await wmsApi.addMaterial(mat);
                   setState(res.state);
                 }}
-                onSaveBom={async (bom) => {
-                  const res = await wmsApi.saveBom(bom);
+                onUpdateMaterial={async (originalKey, mat) => {
+                  const res = await wmsApi.updateMaterial(originalKey, mat);
+                  setState(res.state);
+                }}
+                onDeleteMaterial={async (materialKey) => {
+                  const res = await wmsApi.deleteMaterial(materialKey);
+                  setState(res.state);
+                }}
+                onAddPackagingSpec={async (spec) => {
+                  const res = await wmsApi.addPackagingSpec(spec);
+                  setState(res.state);
+                }}
+                onUpdatePackagingSpec={async (code, spec) => {
+                  const res = await wmsApi.updatePackagingSpec(code, spec);
+                  setState(res.state);
+                }}
+                onDeletePackagingSpec={async (code) => {
+                  const res = await wmsApi.deletePackagingSpec(code);
+                  setState(res.state);
+                }}
+                onSaveBarcodeRule={async (rule) => {
+                  const res = await wmsApi.saveBarcodeRule(rule);
+                  setState(res.state);
+                }}
+                onDeleteBarcodeRule={async (ruleId) => {
+                  const res = await wmsApi.deleteBarcodeRule(ruleId);
+                  setState(res.state);
+                }}
+                onSaveLabelTemplate={async (tpl) => {
+                  const res = await wmsApi.saveLabelTemplate(tpl);
+                  setState(res.state);
+                }}
+                onDeleteLabelTemplate={async (templateId) => {
+                  const res = await wmsApi.deleteLabelTemplate(templateId);
                   setState(res.state);
                 }}
                 onAddWarehouse={async (wh) => {
                   const res = await wmsApi.addWarehouse(wh);
                   setState(res.state);
                 }}
+                onUpdateWarehouse={async (code, wh) => {
+                  const res = await wmsApi.updateWarehouse(code, wh);
+                  setState(res.state);
+                }}
+                onDeleteWarehouse={async (code) => {
+                  const res = await wmsApi.deleteWarehouse(code);
+                  setState(res.state);
+                }}
                 onAddBin={async (bin) => {
                   const res = await wmsApi.addBin(bin);
+                  setState(res.state);
+                }}
+                onUpdateBin={async (binCode, bin) => {
+                  const res = await wmsApi.updateBin(binCode, bin);
+                  setState(res.state);
+                }}
+                onDeleteBin={async (binCode) => {
+                  const res = await wmsApi.deleteBin(binCode);
                   setState(res.state);
                 }}
                 onAddKeeper={async (keeper) => {
                   const res = await wmsApi.addKeeper(keeper);
                   setState(res.state);
                 }}
+                onUpdateKeeper={async (keeperId, keeper) => {
+                  const res = await wmsApi.updateKeeper(keeperId, keeper);
+                  setState(res.state);
+                }}
+                onDeleteKeeper={async (keeperId) => {
+                  const res = await wmsApi.deleteKeeper(keeperId);
+                  setState(res.state);
+                }}
                 onAddSupplier={async (sup) => {
                   const res = await wmsApi.addSupplier(sup);
                   setState(res.state);
                 }}
+                onUpdateSupplier={async (code, sup) => {
+                  const res = await wmsApi.updateSupplier(code, sup);
+                  setState(res.state);
+                }}
+                onDeleteSupplier={async (code) => {
+                  const res = await wmsApi.deleteSupplier(code);
+                  setState(res.state);
+                }}
                 onAddCustomer={async (cus) => {
                   const res = await wmsApi.addCustomer(cus);
+                  setState(res.state);
+                }}
+                onUpdateCustomer={async (code, cus) => {
+                  const res = await wmsApi.updateCustomer(code, cus);
+                  setState(res.state);
+                }}
+                onDeleteCustomer={async (code) => {
+                  const res = await wmsApi.deleteCustomer(code);
                   setState(res.state);
                 }}
                 onAddWorkOrder={async (wo) => {
@@ -263,7 +350,17 @@ export default function App() {
         </main>
       </div>
 
-      <BarcodeLabelModal reel={labelReel} onClose={() => setLabelReel(null)} />
+      <BarcodeLabelModal
+        reel={labelReel}
+        templates={state.labelTemplates}
+        materials={state.materials}
+        printerConfig={state.printerConfig}
+        onSavePrinterConfig={async (cfg) => {
+          const res = await wmsApi.savePrinterConfig(cfg);
+          setState(res.state);
+        }}
+        onClose={() => setLabelReel(null)}
+      />
     </div>
   );
 }

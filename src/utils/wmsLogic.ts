@@ -1,12 +1,16 @@
 import type {
   AsnLine,
   AsnOrder,
+  BarcodeRule,
   BomItem,
   BomMaster,
   Customer,
   CycleCountTask,
+  LabelTemplate,
+  MaterialOwnershipType,
   MaterialSku,
   MsdLevel,
+  PackagingSpec,
   ReelItem,
   ScrapRecord,
   Supplier,
@@ -18,7 +22,46 @@ import type {
   WaveOrder,
   WmsState,
   WorkOrder,
+  ZebraPrinterConfig,
 } from '../types/wms';
+import { DEFAULT_ELEMENT_ORDER, normalizeElementOrder } from './zplEngine';
+
+export function buildMaterialKey(
+  skuCode: string,
+  ownershipType: MaterialOwnershipType = 'SELF_PURCHASED',
+  ownerCode = 'INTERNAL',
+  customerCode = ''
+): string {
+  const cleanSku = skuCode.trim().toUpperCase();
+  const cleanOwner =
+    ownershipType === 'SELF_PURCHASED'
+      ? 'INTERNAL'
+      : (ownerCode.trim() || 'UNSPECIFIED').toUpperCase();
+  const cleanCustomer =
+    ownershipType === 'CUSTOMER_CONSIGNED'
+      ? cleanOwner
+      : customerCode.trim().toUpperCase() || 'COMMON';
+  return `${cleanSku}::${ownershipType}::${cleanOwner}::${cleanCustomer}`;
+}
+
+export function getReelCustomerScope(reel: Pick<ReelItem, 'customerCode' | 'ownershipType' | 'ownerCode'>): string {
+  const cus = reel.customerCode?.trim().toUpperCase() ?? '';
+  if (cus && cus !== 'COMMON') return cus;
+  if (reel.ownershipType === 'CUSTOMER_CONSIGNED') {
+    return (reel.ownerCode?.trim() ?? '').toUpperCase();
+  }
+  return '';
+}
+
+export function isReelEligibleForCustomer(
+  reel: Pick<ReelItem, 'customerCode' | 'ownershipType' | 'ownerCode'>,
+  targetCustomerCode?: string
+): boolean {
+  const reelCus = getReelCustomerScope(reel);
+  if (!reelCus) return true; // 通用共享物料，所有客户工单均可发料
+  const target = (targetCustomerCode ?? '').trim().toUpperCase();
+  return Boolean(target) && reelCus === target;
+}
 
 export function normalizeWmsState(
   raw: Partial<WmsState>,
@@ -35,7 +78,149 @@ export function normalizeWmsState(
     };
   });
 
+  const rawCustomers =
+    Array.isArray(raw.customers) && raw.customers.length > 0
+      ? raw.customers
+      : fallbackSeed.customers;
+
+  const seedMatBySku = new Map(fallbackSeed.materials.map((m) => [m.skuCode, m]));
+  const rawMaterials = Array.isArray(raw.materials)
+    ? raw.materials
+    : fallbackSeed.materials;
+  const materials: MaterialSku[] = rawMaterials.map((m) => {
+    const seedMatch = seedMatBySku.get(m.skuCode);
+    const ownershipType: MaterialOwnershipType =
+      m.ownershipType ?? seedMatch?.ownershipType ?? 'SELF_PURCHASED';
+    const ownerCode =
+      m.ownerCode ??
+      seedMatch?.ownerCode ??
+      (ownershipType === 'SELF_PURCHASED' ? 'INTERNAL' : '');
+    const ownerName =
+      m.ownerName ??
+      seedMatch?.ownerName ??
+      (ownershipType === 'SELF_PURCHASED' ? '本厂自购' : ownerCode);
+    const customerCode =
+      ownershipType === 'CUSTOMER_CONSIGNED'
+        ? ownerCode
+        : (m.customerCode ?? seedMatch?.customerCode ?? '').trim().toUpperCase();
+    const matchedCus = customerCode
+      ? rawCustomers.find((c) => c.customerCode.toUpperCase() === customerCode)
+      : undefined;
+    const customerName = customerCode
+      ? matchedCus?.customerName ?? m.customerName ?? seedMatch?.customerName ?? customerCode
+      : '通用共享 (不限客户)';
+    const computedKey = buildMaterialKey(m.skuCode, ownershipType, ownerCode, customerCode);
+    const materialKey =
+      m.materialKey && m.materialKey.split('::').length >= 4
+        ? m.materialKey
+        : computedKey;
+    return {
+      ...m,
+      ownershipType,
+      ownerCode,
+      ownerName,
+      customerCode,
+      customerName,
+      materialKey,
+      packagingCode: m.packagingCode ?? seedMatch?.packagingCode,
+      packagingName: m.packagingName ?? seedMatch?.packagingName ?? m.packageType,
+      mpq: m.mpq ?? seedMatch?.mpq,
+      supplierCode: m.supplierCode ?? seedMatch?.supplierCode,
+      supplierName: m.supplierName ?? seedMatch?.supplierName,
+    };
+  });
+
+  const rawBoms =
+    Array.isArray(raw.boms) && raw.boms.length > 0 ? raw.boms : fallbackSeed.boms;
+  const boms: BomMaster[] = rawBoms.map((b) => ({
+    ...b,
+    items: (b.items ?? []).map((item, idx) => ({
+      ...item,
+      lineId: item.lineId ?? `${b.bomId}-L${idx + 1}`,
+      itemRole: item.itemRole ?? 'MAIN',
+    })),
+  }));
+
+  const matByKey = new Map(materials.map((m) => [m.materialKey!, m]));
+  const rawReels = Array.isArray(raw.reels) ? raw.reels : fallbackSeed.reels;
+  const reels: ReelItem[] = rawReels.map((r) => {
+    const matchedMat =
+      (r.materialKey ? matByKey.get(r.materialKey) : undefined) ??
+      materials.find((m) => m.skuCode === r.skuCode);
+    const ownershipType = r.ownershipType ?? matchedMat?.ownershipType ?? 'SELF_PURCHASED';
+    const ownerCode = r.ownerCode ?? matchedMat?.ownerCode ?? 'INTERNAL';
+    const ownerName = r.ownerName ?? matchedMat?.ownerName ?? '本厂自购';
+    const customerCode =
+      ownershipType === 'CUSTOMER_CONSIGNED'
+        ? ownerCode
+        : (r.customerCode ?? matchedMat?.customerCode ?? '');
+    const customerName =
+      r.customerName ??
+      (customerCode
+        ? rawCustomers.find((c) => c.customerCode === customerCode)?.customerName ??
+          matchedMat?.customerName ??
+          customerCode
+        : '通用共享 (不限客户)');
+    return {
+      ...r,
+      ownershipType,
+      ownerCode,
+      ownerName,
+      customerCode,
+      customerName,
+    };
+  });
+
+  const seedTplById = new Map(fallbackSeed.labelTemplates.map((t) => [t.templateId, t]));
+  const rawTemplates =
+    Array.isArray(raw.labelTemplates) && raw.labelTemplates.length > 0
+      ? raw.labelTemplates
+      : fallbackSeed.labelTemplates;
+  const labelTemplates: LabelTemplate[] = rawTemplates.map((t) => {
+    const seedTpl = seedTplById.get(t.templateId);
+    return {
+      ...t,
+      dpi: t.dpi === 300 ? 300 : seedTpl?.dpi ?? 203,
+      barcodeType: t.barcodeType ?? seedTpl?.barcodeType ?? 'CODE128',
+      zplMode: t.zplMode ?? seedTpl?.zplMode ?? 'VISUAL',
+      fontScale: t.fontScale ?? seedTpl?.fontScale ?? 'STANDARD',
+      barcodeHeightMm: t.barcodeHeightMm ?? seedTpl?.barcodeHeightMm ?? 8,
+      elementOrder: normalizeElementOrder(t.elementOrder ?? seedTpl?.elementOrder ?? DEFAULT_ELEMENT_ORDER),
+      customZpl: t.customZpl ?? seedTpl?.customZpl ?? '',
+    };
+  });
+
+  const fallbackPrinter: ZebraPrinterConfig = fallbackSeed.printerConfig ?? {
+    mode: 'LAN_TCP',
+    host: '192.168.10.88',
+    port: 9100,
+    browserPrintUrl: 'http://127.0.0.1:9100',
+    selectedDeviceName: '',
+    darkness: 18,
+    printSpeed: 4,
+  };
+  const rawPrinter = raw.printerConfig;
+  const printerConfig: ZebraPrinterConfig = {
+    mode: rawPrinter?.mode ?? fallbackPrinter.mode,
+    host: rawPrinter?.host?.trim() || fallbackPrinter.host,
+    port:
+      typeof rawPrinter?.port === 'number' && rawPrinter.port >= 1 && rawPrinter.port <= 65535
+        ? rawPrinter.port
+        : fallbackPrinter.port,
+    browserPrintUrl: rawPrinter?.browserPrintUrl?.trim() || fallbackPrinter.browserPrintUrl,
+    selectedDeviceName: rawPrinter?.selectedDeviceName ?? fallbackPrinter.selectedDeviceName,
+    darkness:
+      typeof rawPrinter?.darkness === 'number' && rawPrinter.darkness >= 0 && rawPrinter.darkness <= 30
+        ? rawPrinter.darkness
+        : fallbackPrinter.darkness,
+    printSpeed:
+      typeof rawPrinter?.printSpeed === 'number' && rawPrinter.printSpeed >= 2 && rawPrinter.printSpeed <= 12
+        ? rawPrinter.printSpeed
+        : fallbackPrinter.printSpeed,
+  };
+
   return {
+    printerConfig,
     warehouses:
       Array.isArray(raw.warehouses) && raw.warehouses.length > 0
         ? raw.warehouses
@@ -48,17 +233,22 @@ export function normalizeWmsState(
       Array.isArray(raw.suppliers) && raw.suppliers.length > 0
         ? raw.suppliers
         : fallbackSeed.suppliers,
-    customers:
-      Array.isArray(raw.customers) && raw.customers.length > 0
-        ? raw.customers
-        : fallbackSeed.customers,
-    boms:
-      Array.isArray(raw.boms) && raw.boms.length > 0 ? raw.boms : fallbackSeed.boms,
+    customers: rawCustomers,
+    packagingSpecs:
+      Array.isArray(raw.packagingSpecs) && raw.packagingSpecs.length > 0
+        ? raw.packagingSpecs
+        : fallbackSeed.packagingSpecs,
+    barcodeRules:
+      Array.isArray(raw.barcodeRules) && raw.barcodeRules.length > 0
+        ? raw.barcodeRules
+        : fallbackSeed.barcodeRules,
+    labelTemplates,
+    boms,
     asns:
       Array.isArray(raw.asns) && raw.asns.length > 0 ? raw.asns : fallbackSeed.asns,
-    materials: Array.isArray(raw.materials) ? raw.materials : fallbackSeed.materials,
+    materials,
     bins,
-    reels: Array.isArray(raw.reels) ? raw.reels : fallbackSeed.reels,
+    reels,
     workOrders: Array.isArray(raw.workOrders) ? raw.workOrders : fallbackSeed.workOrders,
     waves: Array.isArray(raw.waves) ? raw.waves : fallbackSeed.waves,
     cycleCounts: Array.isArray(raw.cycleCounts) ? raw.cycleCounts : fallbackSeed.cycleCounts,
@@ -95,15 +285,132 @@ export interface ParsedBarcode {
   lotNumber?: string;
   dateCode?: string;
   qty?: number;
+  matchedRuleId?: string;
+  matchedRuleName?: string;
+}
+
+function tryRuleParse(trimmed: string, rule: BarcodeRule): ParsedBarcode | null {
+  if (!rule.enabled || !trimmed.includes(rule.delimiter)) return null;
+  const tokens = trimmed.split(rule.delimiter).map((t) => t.trim());
+
+  if (rule.formatType === 'DELIMITED_ORDER') {
+    if (tokens.some((t) => t.includes(':'))) return null;
+    if (tokens.length < 3) return null;
+    const getByIndex = (keyStr?: string) => {
+      if (keyStr === undefined || keyStr.trim() === '') return undefined;
+      const idx = Number(keyStr.trim());
+      if (!Number.isInteger(idx) || idx < 0 || idx >= tokens.length) return undefined;
+      return tokens[idx] || undefined;
+    };
+    const mpn = getByIndex(rule.fieldMap.mpnKey);
+    const lotNumber = getByIndex(rule.fieldMap.lotKey);
+    const dateCode = getByIndex(rule.fieldMap.dateCodeKey);
+    const qtyRaw = getByIndex(rule.fieldMap.qtyKey);
+    const reelId = getByIndex(rule.fieldMap.reelIdKey);
+    const parsedQty = qtyRaw ? Number(qtyRaw) : undefined;
+    const qty =
+      parsedQty !== undefined && Number.isFinite(parsedQty) && parsedQty > 0
+        ? parsedQty
+        : undefined;
+
+    if (mpn || lotNumber || dateCode) {
+      return {
+        raw: trimmed,
+        reelId,
+        mpn,
+        lotNumber,
+        dateCode,
+        qty,
+        matchedRuleId: rule.ruleId,
+        matchedRuleName: rule.ruleName,
+      };
+    }
+    return null;
+  }
+
+  // KEY_VALUE rule
+  const kvMap = new Map<string, string>();
+  for (const token of tokens) {
+    const idx = token.indexOf(':');
+    if (idx === -1) continue;
+    const k = token.slice(0, idx).trim().toUpperCase();
+    const v = token.slice(idx + 1).trim();
+    if (k && v) kvMap.set(k, v);
+  }
+  if (kvMap.size === 0) return null;
+
+  const pickAliases = (aliases?: string) => {
+    if (!aliases) return undefined;
+    for (const a of aliases.split(',')) {
+      const val = kvMap.get(a.trim().toUpperCase());
+      if (val) return val;
+    }
+    return undefined;
+  };
+
+  const reelId = pickAliases(rule.fieldMap.reelIdKey);
+  const mpn = pickAliases(rule.fieldMap.mpnKey);
+  const lotNumber = pickAliases(rule.fieldMap.lotKey);
+  const dateCode = pickAliases(rule.fieldMap.dateCodeKey);
+  const qtyRaw = pickAliases(rule.fieldMap.qtyKey);
+  const parsedQty = qtyRaw ? Number(qtyRaw) : undefined;
+  const qty =
+    parsedQty !== undefined && Number.isFinite(parsedQty) && parsedQty > 0
+      ? parsedQty
+      : undefined;
+
+  if (reelId || mpn || lotNumber) {
+    return {
+      raw: trimmed,
+      reelId,
+      mpn,
+      lotNumber,
+      dateCode,
+      qty,
+      matchedRuleId: rule.ruleId,
+      matchedRuleName: rule.ruleName,
+    };
+  }
+  return null;
 }
 
 /**
- * Parses either a plain UID (e.g. RL261015-001) or an IPC-1782 / supplier composite QR string
- * such as "UID:RL261117-001|P:STM32F407VET6|L:ST2645A|D:2645|Q:1000"
+ * Parses either a plain UID (e.g. RL261015-001), a configured supplier barcode rule,
+ * or an IPC-1782 composite QR string such as "UID:RL261117-001|P:STM32F407VET6|L:ST2645A|D:2645|Q:1000"
  */
-export function parseBarcodeString(raw: string): ParsedBarcode {
+export function parseBarcodeString(
+  raw: string,
+  rules?: BarcodeRule[],
+  supplierHint?: string
+): ParsedBarcode {
   const trimmed = raw.trim();
   if (!trimmed) return { raw: '' };
+
+  if (rules && rules.length > 0) {
+    const hint = (supplierHint ?? '').trim().toUpperCase();
+    const ordered = rules
+      .filter((r) => r.enabled)
+      .slice()
+      .sort((a, b) => {
+        const aMatch =
+          hint &&
+          (a.supplierCode.toUpperCase() === hint ||
+            a.supplierName.toUpperCase() === hint);
+        const bMatch =
+          hint &&
+          (b.supplierCode.toUpperCase() === hint ||
+            b.supplierName.toUpperCase() === hint);
+        if (aMatch !== bMatch) return aMatch ? -1 : 1;
+        if (a.supplierCode !== 'ALL' && b.supplierCode === 'ALL') return -1;
+        if (a.supplierCode === 'ALL' && b.supplierCode !== 'ALL') return 1;
+        return 0;
+      });
+
+    for (const rule of ordered) {
+      const parsed = tryRuleParse(trimmed, rule);
+      if (parsed) return parsed;
+    }
+  }
 
   if (trimmed.includes('|') || trimmed.includes(':')) {
     const tokens = trimmed.split(/[|;]/);
@@ -158,12 +465,18 @@ export function computeWorkOrderKitting(
 ): { lines: KittingLineStatus[]; readinessPercent: number; isFullyKitted: boolean } {
   const stockBySku = new Map<string, number>();
   for (const r of reels) {
-    if (r.status === 'IN_STOCK' && r.msdState !== 'BAKING_REQUIRED' && r.qty > 0) {
+    if (
+      r.status === 'IN_STOCK' &&
+      r.msdState !== 'BAKING_REQUIRED' &&
+      r.qty > 0 &&
+      isReelEligibleForCustomer(r, wo.customerCode)
+    ) {
       stockBySku.set(r.skuCode, (stockBySku.get(r.skuCode) ?? 0) + r.qty);
     }
   }
 
-  const lines: KittingLineStatus[] = wo.bom.map((b) => {
+  const requiredItems = wo.bom.filter((b) => b.itemRole !== 'SUBSTITUTE');
+  const lines: KittingLineStatus[] = requiredItems.map((b) => {
     const mat = materials.find((m) => m.skuCode === b.skuCode);
     const requiredQty = calculateBomDemandQty(b.qtyPerBoard, b.attritionRate, wo.targetQty);
     const issuedQty = wo.issuedBySku[b.skuCode] ?? 0;
@@ -194,6 +507,7 @@ export function computeWorkOrderKitting(
 }
 
 export interface InboundInput {
+  materialKey?: string;
   skuCode: string;
   lotNumber: string;
   dateCode: string;
@@ -213,7 +527,10 @@ export function applyInbound(
   input: InboundInput,
   now = new Date()
 ): { state: WmsState; reel: ReelItem; event: TraceEvent } {
-  const material = state.materials.find((m) => m.skuCode === input.skuCode);
+  const material =
+    (input.materialKey
+      ? state.materials.find((m) => m.materialKey === input.materialKey)
+      : undefined) ?? state.materials.find((m) => m.skuCode === input.skuCode);
   if (!material) {
     throw new Error(`未找到物料编码: ${input.skuCode}`);
   }
@@ -239,7 +556,7 @@ export function applyInbound(
   }
 
   const asnNo = input.asnNo?.trim() || undefined;
-  let linkedSupplier = input.supplier.trim() || '现货采购';
+  let linkedSupplier = input.supplier.trim() || material.supplierName || '现货采购';
   if (asnNo) {
     const asn = next.asns.find((a) => a.asnNo === asnNo);
     if (!asn) {
@@ -262,14 +579,38 @@ export function applyInbound(
     asn.status = allComplete ? 'COMPLETED' : anyReceived ? 'PARTIAL' : 'PENDING';
   }
 
+  const ownershipType = material.ownershipType ?? 'SELF_PURCHASED';
+  const ownerCode = material.ownerCode ?? 'INTERNAL';
+  const ownerName = material.ownerName ?? '本厂自购';
+  const customerCode =
+    ownershipType === 'CUSTOMER_CONSIGNED'
+      ? ownerCode
+      : (material.customerCode ?? '').trim().toUpperCase();
+  const customerName = customerCode
+    ? material.customerName ??
+      next.customers.find((c) => c.customerCode === customerCode)?.customerName ??
+      customerCode
+    : '通用共享 (不限客户)';
+  const materialKey =
+    material.materialKey ??
+    buildMaterialKey(material.skuCode, ownershipType, ownerCode, customerCode);
+
   const receiptDocNo = input.receiptDocNo?.trim() || asnNo || generateId('RCV', now);
   const reel: ReelItem = {
     reelId,
+    materialKey,
     skuCode: material.skuCode,
     mpn: material.mpn,
     lotNumber: input.lotNumber.trim(),
     dateCode: input.dateCode.trim(),
     supplier: linkedSupplier,
+    ownershipType,
+    ownerCode,
+    ownerName,
+    customerCode,
+    customerName,
+    packagingCode: material.packagingCode,
+    mpq: material.mpq,
     receiptDocNo,
     asnNo,
     initialQty: input.qty,
@@ -311,15 +652,22 @@ export interface DemandItem {
   skuCode: string;
   mpn: string;
   requiredQty: number;
+  customerCode?: string;
+  customerName?: string;
 }
 
 export function consolidateWaveDemand(
   workOrders: WorkOrder[],
   materials: MaterialSku[]
 ): DemandItem[] {
-  const map = new Map<string, number>();
+  const map = new Map<
+    string,
+    { skuCode: string; customerCode?: string; customerName?: string; requiredQty: number }
+  >();
   for (const wo of workOrders) {
+    const woCus = (wo.customerCode ?? '').trim().toUpperCase();
     for (const item of wo.bom) {
+      if (item.itemRole === 'SUBSTITUTE') continue;
       const totalRequired = calculateBomDemandQty(
         item.qtyPerBoard,
         item.attritionRate,
@@ -328,18 +676,27 @@ export function consolidateWaveDemand(
       const alreadyIssued = wo.issuedBySku[item.skuCode] ?? 0;
       const net = Math.max(0, totalRequired - alreadyIssued);
       if (net > 0) {
-        map.set(item.skuCode, (map.get(item.skuCode) ?? 0) + net);
+        const bucketKey = `${item.skuCode}::${woCus}`;
+        const prev = map.get(bucketKey);
+        map.set(bucketKey, {
+          skuCode: item.skuCode,
+          customerCode: woCus || undefined,
+          customerName: wo.customerName,
+          requiredQty: (prev?.requiredQty ?? 0) + net,
+        });
       }
     }
   }
 
   const demands: DemandItem[] = [];
-  for (const [skuCode, requiredQty] of map.entries()) {
-    const mat = materials.find((m) => m.skuCode === skuCode);
+  for (const entry of map.values()) {
+    const mat = materials.find((m) => m.skuCode === entry.skuCode);
     demands.push({
-      skuCode,
-      mpn: mat?.mpn ?? skuCode,
-      requiredQty,
+      skuCode: entry.skuCode,
+      mpn: mat?.mpn ?? entry.skuCode,
+      customerCode: entry.customerCode,
+      customerName: entry.customerName,
+      requiredQty: entry.requiredQty,
     });
   }
   return demands;
@@ -376,9 +733,25 @@ export function allocateReelsFIFO(
   let idx = 1;
   for (const demand of demands) {
     let need = demand.requiredQty;
-    for (const reel of eligible) {
+    const demandCus = (demand.customerCode ?? '').trim().toUpperCase();
+
+    // Filter to customer-eligible reels, preferring customer-dedicated stock before shared COMMON stock
+    const candidateReels = eligible
+      .filter(
+        (reel) =>
+          reel.skuCode === demand.skuCode &&
+          isReelEligibleForCustomer(reel, demand.customerCode)
+      )
+      .sort((a, b) => {
+        const aDed = demandCus && getReelCustomerScope(a) === demandCus ? 0 : 1;
+        const bDed = demandCus && getReelCustomerScope(b) === demandCus ? 0 : 1;
+        if (aDed !== bDed) return aDed - bDed;
+        if (a.dateCode !== b.dateCode) return a.dateCode.localeCompare(b.dateCode);
+        return a.receivedAt.localeCompare(b.receivedAt);
+      });
+
+    for (const reel of candidateReels) {
       if (need <= 0) break;
-      if (reel.skuCode !== demand.skuCode) continue;
       const avail = remainingByReel.get(reel.reelId) ?? 0;
       if (avail <= 0) continue;
 
@@ -390,6 +763,8 @@ export function allocateReelsFIFO(
         id: `WA-${idx++}`,
         skuCode: demand.skuCode,
         mpn: demand.mpn,
+        customerCode: demand.customerCode,
+        customerName: demand.customerName,
         reelId: reel.reelId,
         binCode: reel.binCode,
         dateCode: reel.dateCode,
@@ -508,13 +883,19 @@ export function issueWaveAllocation(
     (a) => a.reelId === targetReelId && a.status === 'PENDING'
   );
   if (!alloc) {
-    // Check if they scanned a reel of the same SKU with newer DateCode (FIFO violation guard!)
+    // Check if they scanned a reel of the same SKU with newer DateCode (FIFO violation guard!) or wrong customer
     const scannedReel = next.reels.find((r) => r.reelId === targetReelId);
     if (scannedReel) {
+      const scannedScope = getReelCustomerScope(scannedReel);
       const pendingSameSku = wave.allocations.find(
         (a) => a.skuCode === scannedReel.skuCode && a.status === 'PENDING'
       );
       if (pendingSameSku) {
+        if (!isReelEligibleForCustomer(scannedReel, pendingSameSku.customerCode)) {
+          throw new Error(
+            `客户业务归属防错拦截: 料盘 ${scannedReel.reelId} 属于「${scannedReel.customerName || scannedScope}」专备物料，禁止发往客户「${pendingSameSku.customerName || '其他客户'}」的波次`
+          );
+        }
         throw new Error(
           `FIFO防错拦截: 物料 ${scannedReel.mpn} 存在更早周期(${pendingSameSku.dateCode})的指定料盘 ${pendingSameSku.reelId} (库位 ${pendingSameSku.binCode})，禁止跳过先进先出`
         );
@@ -526,6 +907,11 @@ export function issueWaveAllocation(
   const reel = next.reels.find((r) => r.reelId === alloc.reelId);
   if (!reel) {
     throw new Error(`料盘不存在: ${alloc.reelId}`);
+  }
+  if (!isReelEligibleForCustomer(reel, alloc.customerCode)) {
+    throw new Error(
+      `客户发料拦截: 料盘 ${reel.reelId} 专属客户与工单客户不一致`
+    );
   }
   if (reel.msdState === 'BAKING_REQUIRED') {
     throw new Error(`MSD防潮拦截: 料盘 ${reel.reelId} 暴露超时需烘烤，禁止发料`);
@@ -715,6 +1101,11 @@ export function applyReplenishment(
   if (reel.status === 'SCRAPPED' || reel.status === 'DEPLETED') {
     throw new Error(`料盘 ${reel.reelId} 状态为 ${reel.status}，无法用于补料`);
   }
+  if (!isReelEligibleForCustomer(reel, wo.customerCode)) {
+    throw new Error(
+      `客户归属防错拦截: 料盘 ${reel.reelId} 为「${reel.customerName || reel.ownerName}」专用物料，不能补料到客户「${wo.customerName || '内部自研'}」的工单 ${wo.workOrderId}`
+    );
+  }
   if (reel.msdState === 'BAKING_REQUIRED') {
     throw new Error(`MSD防潮拦截: 料盘 ${reel.reelId} 需烘烤复位后方可用于产线补料`);
   }
@@ -822,11 +1213,19 @@ export function applyProductionReturn(
     returnedReel = {
       reelId: childId,
       parentReelId: parentReel.reelId,
+      materialKey: parentReel.materialKey,
       skuCode: parentReel.skuCode,
       mpn: parentReel.mpn,
       lotNumber: parentReel.lotNumber,
       dateCode: parentReel.dateCode,
       supplier: parentReel.supplier,
+      ownershipType: parentReel.ownershipType,
+      ownerCode: parentReel.ownerCode,
+      ownerName: parentReel.ownerName,
+      customerCode: parentReel.customerCode,
+      customerName: parentReel.customerName,
+      packagingCode: parentReel.packagingCode,
+      mpq: parentReel.mpq,
       receiptDocNo: docNo,
       initialQty: input.returnQty,
       qty: input.returnQty,
@@ -1105,21 +1504,328 @@ export function addMaterialSku(
   state: WmsState,
   input: MaterialSku
 ): { state: WmsState; material: MaterialSku } {
-  if (!input.skuCode.trim() || !input.mpn.trim() || !input.name.trim()) {
-    throw new Error('物料编码、MPN和物料名称不能为空');
+  const mpn = input.mpn.trim();
+  const skuCode = (input.skuCode?.trim() || mpn).toUpperCase();
+  const name = input.name.trim();
+  if (!skuCode || !mpn || !name) {
+    throw new Error('料号 SKU、原厂型号 MPN 和物料描述不能为空');
   }
-  if (state.materials.some((m) => m.skuCode === input.skuCode.trim())) {
-    throw new Error(`物料编码已存在: ${input.skuCode}`);
+
+  const ownershipType: MaterialOwnershipType = input.ownershipType ?? 'SELF_PURCHASED';
+  let ownerCode =
+    ownershipType === 'SELF_PURCHASED'
+      ? 'INTERNAL'
+      : (input.ownerCode ?? '').trim().toUpperCase();
+
+  if (ownershipType !== 'SELF_PURCHASED' && !ownerCode) {
+    throw new Error(
+      ownershipType === 'CUSTOMER_CONSIGNED'
+        ? '客户客供料必须指定归属客户编码'
+        : 'VMI寄售料必须指定归属供应商编码'
+    );
   }
+
+  let ownerName = input.ownerName?.trim() || '本厂自购';
+  if (ownershipType === 'CUSTOMER_CONSIGNED') {
+    const cus = state.customers.find((c) => c.customerCode.toUpperCase() === ownerCode);
+    ownerName = cus?.customerName ?? (input.ownerName?.trim() || ownerCode);
+  } else if (ownershipType === 'VMI_CONSIGNED') {
+    const sup = state.suppliers.find((s) => s.supplierCode.toUpperCase() === ownerCode);
+    ownerName = sup?.supplierName ?? (input.ownerName?.trim() || ownerCode);
+  } else {
+    ownerCode = 'INTERNAL';
+    ownerName = '本厂自购';
+  }
+
+  let customerCode = '';
+  let customerName = '通用共享 (不限客户)';
+  if (ownershipType === 'CUSTOMER_CONSIGNED') {
+    customerCode = ownerCode;
+    customerName = ownerName;
+  } else {
+    const rawCus = (input.customerCode ?? '').trim().toUpperCase();
+    if (rawCus && rawCus !== 'COMMON') {
+      const cus = state.customers.find((c) => c.customerCode.toUpperCase() === rawCus);
+      if (!cus && !input.customerName?.trim()) {
+        throw new Error(`指定的业务对应客户不存在: ${rawCus}`);
+      }
+      customerCode = cus?.customerCode ?? rawCus;
+      customerName = cus?.customerName ?? input.customerName?.trim() ?? rawCus;
+    }
+  }
+
+  const materialKey = buildMaterialKey(skuCode, ownershipType, ownerCode, customerCode);
+  const exists = state.materials.some((m) => {
+    const existingKey =
+      m.materialKey ??
+      buildMaterialKey(m.skuCode, m.ownershipType, m.ownerCode, m.customerCode);
+    return existingKey === materialKey;
+  });
+  if (exists) {
+    throw new Error(`同一料号与业务归属组合已存在: ${skuCode} (${ownerName} / ${customerName})`);
+  }
+
+  const pkg = input.packagingCode
+    ? state.packagingSpecs.find((p) => p.packagingCode === input.packagingCode)
+    : undefined;
+  const supplierObj = input.supplierCode
+    ? state.suppliers.find((s) => s.supplierCode === input.supplierCode)
+    : undefined;
+
+  const mpq =
+    input.mpq && Number(input.mpq) > 0
+      ? Math.round(Number(input.mpq))
+      : pkg?.defaultSpq ?? 1000;
+
   const next = cloneState(state);
   const material: MaterialSku = {
     ...input,
-    skuCode: input.skuCode.trim(),
-    mpn: input.mpn.trim(),
-    name: input.name.trim(),
+    materialKey,
+    skuCode,
+    mpn,
+    name,
+    ownershipType,
+    ownerCode,
+    ownerName,
+    customerCode,
+    customerName,
+    packagingCode: pkg?.packagingCode ?? input.packagingCode,
+    packagingName: pkg?.packagingName ?? input.packagingName ?? input.packageType,
+    mpq,
+    supplierCode: supplierObj?.supplierCode ?? input.supplierCode,
+    supplierName: supplierObj?.supplierName ?? input.supplierName ?? '现货直采',
+    packageType: input.packageType?.trim() || pkg?.packagingName || '标准封装',
   };
   next.materials.push(material);
   return { state: next, material };
+}
+
+export function updateMaterialSku(
+  state: WmsState,
+  originalKey: string,
+  input: MaterialSku
+): { state: WmsState; material: MaterialSku } {
+  const idx = state.materials.findIndex((m) => {
+    const k =
+      m.materialKey ??
+      buildMaterialKey(m.skuCode, m.ownershipType, m.ownerCode, m.customerCode);
+    return k === originalKey;
+  });
+  if (idx < 0) {
+    throw new Error(`未找到待修改的物料档案: ${originalKey}`);
+  }
+
+  const oldMat = state.materials[idx];
+  const mpn = input.mpn.trim();
+  const skuCode = (input.skuCode?.trim() || mpn).toUpperCase();
+  const name = input.name.trim();
+  if (!skuCode || !mpn || !name) {
+    throw new Error('料号 SKU、原厂型号 MPN 和物料描述不能为空');
+  }
+
+  const ownershipType: MaterialOwnershipType = input.ownershipType ?? 'SELF_PURCHASED';
+  let ownerCode =
+    ownershipType === 'SELF_PURCHASED'
+      ? 'INTERNAL'
+      : (input.ownerCode ?? '').trim().toUpperCase();
+  if (ownershipType !== 'SELF_PURCHASED' && !ownerCode) {
+    throw new Error(
+      ownershipType === 'CUSTOMER_CONSIGNED'
+        ? '客户客供料必须指定归属客户编码'
+        : 'VMI寄售料必须指定归属供应商编码'
+    );
+  }
+
+  let ownerName = input.ownerName?.trim() || '本厂自购';
+  if (ownershipType === 'CUSTOMER_CONSIGNED') {
+    const cus = state.customers.find((c) => c.customerCode.toUpperCase() === ownerCode);
+    ownerName = cus?.customerName ?? (input.ownerName?.trim() || ownerCode);
+  } else if (ownershipType === 'VMI_CONSIGNED') {
+    const sup = state.suppliers.find((s) => s.supplierCode.toUpperCase() === ownerCode);
+    ownerName = sup?.supplierName ?? (input.ownerName?.trim() || ownerCode);
+  } else {
+    ownerCode = 'INTERNAL';
+    ownerName = '本厂自购';
+  }
+
+  let customerCode = '';
+  let customerName = '通用共享 (不限客户)';
+  if (ownershipType === 'CUSTOMER_CONSIGNED') {
+    customerCode = ownerCode;
+    customerName = ownerName;
+  } else {
+    const rawCus = (input.customerCode ?? '').trim().toUpperCase();
+    if (rawCus && rawCus !== 'COMMON') {
+      const cus = state.customers.find((c) => c.customerCode.toUpperCase() === rawCus);
+      if (!cus && !input.customerName?.trim()) {
+        throw new Error(`指定的业务对应客户不存在: ${rawCus}`);
+      }
+      customerCode = cus?.customerCode ?? rawCus;
+      customerName = cus?.customerName ?? input.customerName?.trim() ?? rawCus;
+    }
+  }
+
+  const newKey = buildMaterialKey(skuCode, ownershipType, ownerCode, customerCode);
+  const dupIdx = state.materials.findIndex((m, i) => {
+    if (i === idx) return false;
+    const k =
+      m.materialKey ??
+      buildMaterialKey(m.skuCode, m.ownershipType, m.ownerCode, m.customerCode);
+    return k === newKey;
+  });
+  if (dupIdx >= 0) {
+    throw new Error(`同一料号与业务归属组合已存在: ${skuCode} (${ownerName} / ${customerName})`);
+  }
+
+  const pkg = input.packagingCode
+    ? state.packagingSpecs.find((p) => p.packagingCode === input.packagingCode)
+    : undefined;
+  const supplierObj = input.supplierCode
+    ? state.suppliers.find((s) => s.supplierCode === input.supplierCode)
+    : undefined;
+  const mpq =
+    input.mpq && Number(input.mpq) > 0
+      ? Math.round(Number(input.mpq))
+      : pkg?.defaultSpq ?? oldMat.mpq ?? 1000;
+
+  const next = cloneState(state);
+  const material: MaterialSku = {
+    ...oldMat,
+    ...input,
+    materialKey: newKey,
+    skuCode,
+    mpn,
+    name,
+    ownershipType,
+    ownerCode,
+    ownerName,
+    customerCode,
+    customerName,
+    packagingCode: pkg?.packagingCode ?? input.packagingCode,
+    packagingName: pkg?.packagingName ?? input.packagingName ?? input.packageType,
+    mpq,
+    supplierCode: supplierObj?.supplierCode ?? input.supplierCode,
+    supplierName: supplierObj?.supplierName ?? input.supplierName ?? oldMat.supplierName,
+    packageType: input.packageType?.trim() || pkg?.packagingName || oldMat.packageType,
+  };
+  next.materials[idx] = material;
+
+  // Sync linked reels for this materialKey
+  for (const r of next.reels) {
+    const rKey =
+      r.materialKey ??
+      buildMaterialKey(
+        r.skuCode,
+        r.ownershipType ?? 'SELF_PURCHASED',
+        r.ownerCode ?? 'INTERNAL',
+        r.customerCode ?? ''
+      );
+    if (rKey === originalKey) {
+      r.materialKey = newKey;
+      r.skuCode = skuCode;
+      r.mpn = mpn;
+      r.ownershipType = ownershipType;
+      r.ownerCode = ownerCode;
+      r.ownerName = ownerName;
+      r.customerCode = customerCode;
+      r.customerName = customerName;
+      r.msdLevel = material.msdLevel;
+      r.mpq = mpq;
+    }
+  }
+
+  // If SKU code changed and no other material uses oldMat.skuCode, cascade rename to BOMs & open ASNs & WOs
+  if (oldMat.skuCode !== skuCode && !next.materials.some((m) => m.skuCode === oldMat.skuCode)) {
+    for (const b of next.boms) {
+      for (const item of b.items) {
+        if (item.skuCode === oldMat.skuCode) item.skuCode = skuCode;
+        if (item.substituteForSku === oldMat.skuCode) item.substituteForSku = skuCode;
+      }
+    }
+    for (const asn of next.asns) {
+      for (const line of asn.lines) {
+        if (line.skuCode === oldMat.skuCode) {
+          line.skuCode = skuCode;
+          line.mpn = mpn;
+        }
+      }
+    }
+    for (const wo of next.workOrders) {
+      if (wo.status === 'COMPLETED') continue;
+      for (const item of wo.bom) {
+        if (item.skuCode === oldMat.skuCode) item.skuCode = skuCode;
+        if (item.substituteForSku === oldMat.skuCode) item.substituteForSku = skuCode;
+      }
+    }
+  }
+
+  return { state: next, material };
+}
+
+export function deleteMaterialSku(
+  state: WmsState,
+  materialKey: string
+): { state: WmsState } {
+  const idx = state.materials.findIndex((m) => {
+    const k =
+      m.materialKey ??
+      buildMaterialKey(m.skuCode, m.ownershipType, m.ownerCode, m.customerCode);
+    return k === materialKey;
+  });
+  if (idx < 0) {
+    throw new Error(`未找到待删除的物料档案: ${materialKey}`);
+  }
+  const target = state.materials[idx];
+
+  const activeReels = state.reels.filter((r) => {
+    const rKey =
+      r.materialKey ??
+      buildMaterialKey(
+        r.skuCode,
+        r.ownershipType ?? 'SELF_PURCHASED',
+        r.ownerCode ?? 'INTERNAL',
+        r.customerCode ?? ''
+      );
+    return (
+      rKey === materialKey &&
+      r.status !== 'DEPLETED' &&
+      r.status !== 'SCRAPPED' &&
+      r.qty > 0
+    );
+  });
+  if (activeReels.length > 0) {
+    throw new Error(
+      `物料 ${target.skuCode} (${target.ownerName}) 尚有 ${activeReels.length} 盘在库或线边库存，无法删除`
+    );
+  }
+
+  const hasSiblingSameSku = state.materials.some((m, i) => i !== idx && m.skuCode === target.skuCode);
+  if (!hasSiblingSameSku) {
+    const bomRef = state.boms.find((b) =>
+      b.items.some((i) => i.skuCode === target.skuCode || i.substituteForSku === target.skuCode)
+    );
+    if (bomRef) {
+      throw new Error(`物料 ${target.skuCode} 已被机型 BOM (${bomRef.productCode}) 引用，请先从 BOM 移除`);
+    }
+    const openAsnRef = state.asns.find(
+      (a) =>
+        (a.status === 'PENDING' || a.status === 'PARTIAL') &&
+        a.lines.some((l) => l.skuCode === target.skuCode)
+    );
+    if (openAsnRef) {
+      throw new Error(`物料 ${target.skuCode} 存在未完结的 ASN (${openAsnRef.asnNo})，无法删除`);
+    }
+    const woRef = state.workOrders.find(
+      (w) => w.status !== 'COMPLETED' && w.bom.some((i) => i.skuCode === target.skuCode)
+    );
+    if (woRef) {
+      throw new Error(`物料 ${target.skuCode} 已被工单 (${woRef.workOrderId}) 引用，无法删除`);
+    }
+  }
+
+  const next = cloneState(state);
+  next.materials.splice(idx, 1);
+  return { state: next };
 }
 
 export function addWorkOrder(
@@ -1315,6 +2021,7 @@ export function computeSmtAnomalies(
     if (wo.status === 'COMPLETED') continue;
     const isRunning = wo.status === 'IN_PRODUCTION' || wo.status === 'ISSUING';
     for (const item of wo.bom) {
+      if (item.itemRole === 'SUBSTITUTE') continue;
       const totalReq = calculateBomDemandQty(
         item.qtyPerBoard,
         item.attritionRate,
@@ -1431,7 +2138,11 @@ export function computeSmtAnomalies(
 
   // 4. Abnormal Inventory Levels (Zero/Low Safety Stock, Overstock, & Stagnant Aging > 30d)
   const inventoryLevels: InventoryLevelAnomaly[] = [];
+  const seenLevelSku = new Set<string>();
   for (const mat of state.materials) {
+    if (seenLevelSku.has(mat.skuCode)) continue;
+    if (mat.ownershipType === 'CUSTOMER_CONSIGNED' && mat.safetyStock === 0) continue;
+    seenLevelSku.add(mat.skuCode);
     const avail = availableBySku.get(mat.skuCode) ?? 0;
     if (avail === 0) {
       inventoryLevels.push({
@@ -1799,6 +2510,9 @@ export function saveBomMaster(
     if (!Number.isFinite(item.qtyPerBoard) || item.qtyPerBoard <= 0) {
       throw new Error(`物料 ${item.skuCode} 单板用量必须大于 0`);
     }
+    if (item.itemRole === 'SUBSTITUTE' && !item.substituteForSku?.trim()) {
+      throw new Error(`替代料 ${item.skuCode} 必须指定被替代的主/特料料号`);
+    }
   }
 
   const next = cloneState(state);
@@ -1816,11 +2530,20 @@ export function saveBomMaster(
     customerName: customer?.customerName,
     processType: input.processType.trim() || '双面SMT + 回流焊',
     status: input.status ?? 'ACTIVE',
-    items: input.items.map((item) => ({
+    items: input.items.map((item, idx) => ({
+      lineId: item.lineId?.trim() || `${bomId}-L${idx + 1}`,
       skuCode: item.skuCode,
       qtyPerBoard: Number(item.qtyPerBoard),
       attritionRate: Number.isFinite(item.attritionRate) ? item.attritionRate : 0.02,
       designators: item.designators.trim() || '-',
+      itemRole: item.itemRole ?? 'MAIN',
+      substituteForSku:
+        item.itemRole === 'SUBSTITUTE' ? item.substituteForSku?.trim() : undefined,
+      substitutePriority:
+        item.itemRole === 'SUBSTITUTE' ? Math.max(1, Number(item.substitutePriority) || 1) : undefined,
+      substituteRatio:
+        item.itemRole === 'SUBSTITUTE' ? Math.max(0.01, Number(item.substituteRatio) || 1) : undefined,
+      remark: item.remark?.trim() || undefined,
     })),
     updatedAt: now.toISOString(),
   };
@@ -2085,5 +2808,653 @@ export function cancelAsnOrder(
   asn.status = 'CANCELLED';
   return { state: next, asn };
 }
+
+export function addPackagingSpec(
+  state: WmsState,
+  input: PackagingSpec
+): { state: WmsState; spec: PackagingSpec } {
+  const packagingCode = input.packagingCode.trim().toUpperCase();
+  const packagingName = input.packagingName.trim();
+  if (!packagingCode || !packagingName) {
+    throw new Error('包装方式编码与名称不能为空');
+  }
+  if (!Number.isFinite(input.defaultSpq) || input.defaultSpq <= 0) {
+    throw new Error('标准最小包装数量 (SPQ) 必须大于 0');
+  }
+  if (
+    state.packagingSpecs.some(
+      (p) => p.packagingCode.toUpperCase() === packagingCode
+    )
+  ) {
+    throw new Error(`包装方式编码已存在: ${packagingCode}`);
+  }
+
+  const next = cloneState(state);
+  const spec: PackagingSpec = {
+    ...input,
+    packagingCode,
+    packagingName,
+    reelDiameter: input.reelDiameter.trim() || '-',
+    tapeWidthMm: Math.max(0, Number(input.tapeWidthMm) || 0),
+    pitchMm: Math.max(0, Number(input.pitchMm) || 0),
+    defaultSpq: Math.round(input.defaultSpq),
+    description: input.description.trim() || packagingName,
+  };
+  next.packagingSpecs.push(spec);
+  return { state: next, spec };
+}
+
+export function saveBarcodeRule(
+  state: WmsState,
+  input: Omit<BarcodeRule, 'ruleId' | 'supplierName'> & {
+    ruleId?: string;
+    supplierName?: string;
+  }
+): { state: WmsState; rule: BarcodeRule } {
+  const ruleName = input.ruleName.trim();
+  if (!ruleName) {
+    throw new Error('条码解析规则名称不能为空');
+  }
+  const supplierCode = input.supplierCode.trim().toUpperCase() || 'ALL';
+  const supplier =
+    supplierCode === 'ALL'
+      ? undefined
+      : state.suppliers.find((s) => s.supplierCode.toUpperCase() === supplierCode);
+
+  const next = cloneState(state);
+  const ruleId =
+    input.ruleId?.trim().toUpperCase() ||
+    `RULE-${String(next.barcodeRules.length + 1).padStart(3, '0')}`;
+  const rule: BarcodeRule = {
+    ruleId,
+    ruleName,
+    supplierCode,
+    supplierName:
+      supplier?.supplierName ??
+      (supplierCode === 'ALL'
+        ? '全部供应商 (通用兜底)'
+        : input.supplierName?.trim() || supplierCode),
+    formatType: input.formatType,
+    delimiter: input.delimiter,
+    fieldMap: input.fieldMap,
+    sampleBarcode: input.sampleBarcode.trim(),
+    enabled: input.enabled ?? true,
+  };
+
+  const idx = next.barcodeRules.findIndex((r) => r.ruleId === ruleId);
+  if (idx >= 0) {
+    next.barcodeRules[idx] = rule;
+  } else {
+    next.barcodeRules.unshift(rule);
+  }
+  return { state: next, rule };
+}
+
+export function saveLabelTemplate(
+  state: WmsState,
+  input: Omit<LabelTemplate, 'templateId'> & { templateId?: string }
+): { state: WmsState; template: LabelTemplate } {
+  const templateName = input.templateName.trim();
+  if (!templateName) {
+    throw new Error('标签模板名称不能为空');
+  }
+  const next = cloneState(state);
+  const templateId =
+    input.templateId?.trim().toUpperCase() ||
+    `TPL-${String(next.labelTemplates.length + 1).padStart(3, '0')}`;
+
+  if (input.isDefault) {
+    for (const tpl of next.labelTemplates) {
+      tpl.isDefault = false;
+    }
+  }
+
+  const barcodeHeightMm =
+    typeof input.barcodeHeightMm === 'number' && Number.isFinite(input.barcodeHeightMm)
+      ? Math.max(4, Math.min(24, Math.round(input.barcodeHeightMm)))
+      : 8;
+
+  const template: LabelTemplate = {
+    ...input,
+    templateId,
+    templateName,
+    dpi: input.dpi === 300 ? 300 : 203,
+    barcodeType: input.barcodeType ?? 'CODE128',
+    zplMode: input.zplMode ?? 'VISUAL',
+    fontScale: input.fontScale ?? 'STANDARD',
+    barcodeHeightMm,
+    elementOrder: normalizeElementOrder(input.elementOrder),
+    customZpl: input.customZpl ?? '',
+    headerTitle: input.headerTitle.trim() || 'SMT 料盘唯一标识',
+    footerNote: input.footerNote.trim() || 'IPC-1782 全程追溯',
+  };
+
+  const idx = next.labelTemplates.findIndex((t) => t.templateId === templateId);
+  if (idx >= 0) {
+    next.labelTemplates[idx] = template;
+  } else {
+    next.labelTemplates.push(template);
+  }
+  return { state: next, template };
+}
+
+export function savePrinterConfig(
+  state: WmsState,
+  input: Partial<ZebraPrinterConfig>
+): { state: WmsState; printerConfig: ZebraPrinterConfig } {
+  const current = state.printerConfig ?? {
+    mode: 'LAN_TCP' as const,
+    host: '192.168.10.88',
+    port: 9100,
+    browserPrintUrl: 'http://127.0.0.1:9100',
+    selectedDeviceName: '',
+    darkness: 18,
+    printSpeed: 4,
+  };
+  const mode = input.mode ?? current.mode;
+  const host = (input.host ?? current.host).trim();
+  const port = Number(input.port ?? current.port);
+  const browserPrintUrl = (input.browserPrintUrl ?? current.browserPrintUrl).trim();
+  const darkness = Number(input.darkness ?? current.darkness);
+  const printSpeed = Number(input.printSpeed ?? current.printSpeed);
+
+  if (mode === 'LAN_TCP' && !host) {
+    throw new Error('局域网打印模式下，Zebra 打印机 IP/主机名不能为空');
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('TCP 端口号必须在 1 - 65535 之间（Zebra 默认 9100）');
+  }
+  if (!Number.isFinite(darkness) || darkness < 0 || darkness > 30) {
+    throw new Error('打印黑度 (^MD) 范围应为 0 - 30');
+  }
+  if (!Number.isFinite(printSpeed) || printSpeed < 2 || printSpeed > 12) {
+    throw new Error('打印速度 (^PR) 范围应为 2 - 12 ips');
+  }
+
+  const next = cloneState(state);
+  const printerConfig: ZebraPrinterConfig = {
+    mode,
+    host: host || '192.168.10.88',
+    port,
+    browserPrintUrl: browserPrintUrl || 'http://127.0.0.1:9100',
+    selectedDeviceName: (input.selectedDeviceName ?? current.selectedDeviceName ?? '').trim(),
+    darkness: Math.round(darkness),
+    printSpeed: Math.round(printSpeed),
+  };
+  next.printerConfig = printerConfig;
+  return { state: next, printerConfig };
+}
+
+export function updatePackagingSpec(
+  state: WmsState,
+  packagingCode: string,
+  input: PackagingSpec
+): { state: WmsState; spec: PackagingSpec } {
+  const code = packagingCode.trim().toUpperCase();
+  const idx = state.packagingSpecs.findIndex((p) => p.packagingCode.toUpperCase() === code);
+  if (idx < 0) {
+    throw new Error(`包装方式编码不存在: ${code}`);
+  }
+  const packagingName = input.packagingName.trim();
+  if (!packagingName) {
+    throw new Error('包装方式名称不能为空');
+  }
+  if (!Number.isFinite(input.defaultSpq) || input.defaultSpq <= 0) {
+    throw new Error('标准最小包装数量 (SPQ) 必须大于 0');
+  }
+
+  const next = cloneState(state);
+  const spec: PackagingSpec = {
+    ...input,
+    packagingCode: next.packagingSpecs[idx].packagingCode,
+    packagingName,
+    reelDiameter: input.reelDiameter.trim() || '-',
+    tapeWidthMm: Math.max(0, Number(input.tapeWidthMm) || 0),
+    pitchMm: Math.max(0, Number(input.pitchMm) || 0),
+    defaultSpq: Math.round(input.defaultSpq),
+    description: input.description.trim() || packagingName,
+  };
+  next.packagingSpecs[idx] = spec;
+  for (const m of next.materials) {
+    if (m.packagingCode === spec.packagingCode) {
+      m.packagingName = spec.packagingName;
+      m.packageType = spec.packagingName;
+    }
+  }
+  return { state: next, spec };
+}
+
+export function deletePackagingSpec(
+  state: WmsState,
+  packagingCode: string
+): { state: WmsState } {
+  const code = packagingCode.trim().toUpperCase();
+  const idx = state.packagingSpecs.findIndex((p) => p.packagingCode.toUpperCase() === code);
+  if (idx < 0) {
+    throw new Error(`包装方式编码不存在: ${code}`);
+  }
+  const refs = state.materials.filter((m) => m.packagingCode?.toUpperCase() === code);
+  if (refs.length > 0) {
+    throw new Error(`包装规格 ${code} 正被 ${refs.length} 条物料档案引用，无法删除`);
+  }
+  const next = cloneState(state);
+  next.packagingSpecs.splice(idx, 1);
+  return { state: next };
+}
+
+export function deleteBarcodeRule(
+  state: WmsState,
+  ruleId: string
+): { state: WmsState } {
+  const idx = state.barcodeRules.findIndex((r) => r.ruleId === ruleId);
+  if (idx < 0) {
+    throw new Error(`条码规则不存在: ${ruleId}`);
+  }
+  const next = cloneState(state);
+  next.barcodeRules.splice(idx, 1);
+  return { state: next };
+}
+
+export function deleteLabelTemplate(
+  state: WmsState,
+  templateId: string
+): { state: WmsState } {
+  const idx = state.labelTemplates.findIndex((t) => t.templateId === templateId);
+  if (idx < 0) {
+    throw new Error(`标签模板不存在: ${templateId}`);
+  }
+  if (state.labelTemplates.length <= 1) {
+    throw new Error('至少需保留一套默认标签打印模板');
+  }
+  const next = cloneState(state);
+  const [removed] = next.labelTemplates.splice(idx, 1);
+  if (removed.isDefault && next.labelTemplates.length > 0) {
+    next.labelTemplates[0].isDefault = true;
+  }
+  return { state: next };
+}
+
+export function updateWarehouse(
+  state: WmsState,
+  warehouseCode: string,
+  input: {
+    warehouseName: string;
+    warehouseType: string;
+    managerId: string;
+    address: string;
+    status?: 'ACTIVE' | 'INACTIVE';
+  }
+): { state: WmsState; warehouse: Warehouse } {
+  const code = warehouseCode.trim().toUpperCase();
+  const idx = state.warehouses.findIndex((w) => w.warehouseCode.toUpperCase() === code);
+  if (idx < 0) {
+    throw new Error(`仓库不存在: ${code}`);
+  }
+  const warehouseName = input.warehouseName.trim();
+  if (!warehouseName) {
+    throw new Error('仓库名称不能为空');
+  }
+  const keeper = state.keepers.find((k) => k.keeperId === input.managerId);
+  if (!keeper) {
+    throw new Error('请指定有效的仓库管理员');
+  }
+  const next = cloneState(state);
+  const existing = next.warehouses[idx];
+  const updated: Warehouse = {
+    ...existing,
+    warehouseName,
+    warehouseType: input.warehouseType.trim() || existing.warehouseType,
+    managerId: keeper.keeperId,
+    managerName: keeper.name,
+    address: input.address.trim() || existing.address,
+    status: input.status ?? existing.status,
+  };
+  next.warehouses[idx] = updated;
+  return { state: next, warehouse: updated };
+}
+
+export function deleteWarehouse(
+  state: WmsState,
+  warehouseCode: string
+): { state: WmsState } {
+  const code = warehouseCode.trim().toUpperCase();
+  const idx = state.warehouses.findIndex((w) => w.warehouseCode.toUpperCase() === code);
+  if (idx < 0) {
+    throw new Error(`仓库不存在: ${code}`);
+  }
+  const binRefs = state.bins.filter((b) => (b.warehouseCode ?? '').toUpperCase() === code);
+  if (binRefs.length > 0) {
+    throw new Error(`仓库 ${code} 下仍有 ${binRefs.length} 个库位，请先清理库位`);
+  }
+  const keeperRefs = state.keepers.filter((k) => k.warehouseCode.toUpperCase() === code);
+  if (keeperRefs.length > 0) {
+    throw new Error(`仓库 ${code} 下仍绑定有 ${keeperRefs.length} 名管理员，请先变更其所属仓库`);
+  }
+  const openAsn = state.asns.find(
+    (a) =>
+      (a.status === 'PENDING' || a.status === 'PARTIAL') &&
+      a.warehouseCode.toUpperCase() === code
+  );
+  if (openAsn) {
+    throw new Error(`仓库 ${code} 存在待收 ASN (${openAsn.asnNo})，无法删除`);
+  }
+  const next = cloneState(state);
+  next.warehouses.splice(idx, 1);
+  return { state: next };
+}
+
+export function updateWarehouseBin(
+  state: WmsState,
+  binCode: string,
+  input: Omit<WarehouseBin, 'binCode'> & { binCode?: string }
+): { state: WmsState; bin: WarehouseBin } {
+  const code = binCode.trim().toUpperCase();
+  const idx = state.bins.findIndex((b) => b.binCode.toUpperCase() === code);
+  if (idx < 0) {
+    throw new Error(`库位不存在: ${code}`);
+  }
+  const warehouseCode = input.warehouseCode?.trim() || state.bins[idx].warehouseCode;
+  if (warehouseCode && !state.warehouses.some((w) => w.warehouseCode === warehouseCode)) {
+    throw new Error(`所属仓库不存在: ${warehouseCode}`);
+  }
+  if (!Number.isFinite(input.capacityReels) || input.capacityReels <= 0) {
+    throw new Error('库位容盘数必须大于 0');
+  }
+  const next = cloneState(state);
+  const existing = next.bins[idx];
+  const updated: WarehouseBin = {
+    ...existing,
+    warehouseCode,
+    zone: input.zone,
+    capacityReels: Math.round(input.capacityReels),
+    keeperName: input.keeperName?.trim() || existing.keeperName,
+    description: input.description.trim() || existing.description,
+  };
+  next.bins[idx] = updated;
+  return { state: next, bin: updated };
+}
+
+export function deleteWarehouseBin(
+  state: WmsState,
+  binCode: string
+): { state: WmsState } {
+  const code = binCode.trim().toUpperCase();
+  const idx = state.bins.findIndex((b) => b.binCode.toUpperCase() === code);
+  if (idx < 0) {
+    throw new Error(`库位不存在: ${code}`);
+  }
+  const activeReels = state.reels.filter(
+    (r) =>
+      r.binCode.toUpperCase() === code &&
+      r.status !== 'DEPLETED' &&
+      r.status !== 'SCRAPPED' &&
+      r.qty > 0
+  );
+  if (activeReels.length > 0) {
+    throw new Error(`库位 ${code} 尚有 ${activeReels.length} 盘物料在库，无法删除`);
+  }
+  const matRefs = state.materials.filter((m) => m.defaultBin.toUpperCase() === code);
+  if (matRefs.length > 0) {
+    throw new Error(`库位 ${code} 正被 ${matRefs.length} 条物料作为默认库位引用，无法删除`);
+  }
+  const next = cloneState(state);
+  next.bins.splice(idx, 1);
+  return { state: next };
+}
+
+export function updateWarehouseKeeper(
+  state: WmsState,
+  keeperId: string,
+  input: Omit<WarehouseKeeper, 'keeperId' | 'status'> & { status?: 'ACTIVE' | 'INACTIVE' }
+): { state: WmsState; keeper: WarehouseKeeper } {
+  const idx = state.keepers.findIndex((k) => k.keeperId === keeperId);
+  if (idx < 0) {
+    throw new Error(`管理员档案不存在: ${keeperId}`);
+  }
+  const employeeNo = input.employeeNo.trim().toUpperCase();
+  const name = input.name.trim();
+  if (!employeeNo || !name) {
+    throw new Error('员工工号与管理员姓名不能为空');
+  }
+  if (
+    state.keepers.some(
+      (k, i) => i !== idx && k.employeeNo.toUpperCase() === employeeNo
+    )
+  ) {
+    throw new Error(`工号已存在: ${employeeNo}`);
+  }
+  if (!state.warehouses.some((w) => w.warehouseCode === input.warehouseCode)) {
+    throw new Error(`所属仓库不存在: ${input.warehouseCode}`);
+  }
+  const next = cloneState(state);
+  const oldKeeper = next.keepers[idx];
+  const updated: WarehouseKeeper = {
+    ...oldKeeper,
+    employeeNo,
+    name,
+    role: input.role,
+    warehouseCode: input.warehouseCode,
+    phone: input.phone.trim() || '-',
+    shift: input.shift,
+    status: input.status ?? oldKeeper.status,
+  };
+  next.keepers[idx] = updated;
+  for (const wh of next.warehouses) {
+    if (wh.managerId === keeperId) {
+      wh.managerName = updated.name;
+    }
+  }
+  if (oldKeeper.name !== updated.name) {
+    for (const b of next.bins) {
+      if (b.keeperName === oldKeeper.name) {
+        b.keeperName = updated.name;
+      }
+    }
+  }
+  return { state: next, keeper: updated };
+}
+
+export function deleteWarehouseKeeper(
+  state: WmsState,
+  keeperId: string
+): { state: WmsState } {
+  const idx = state.keepers.findIndex((k) => k.keeperId === keeperId);
+  if (idx < 0) {
+    throw new Error(`管理员档案不存在: ${keeperId}`);
+  }
+  const managedWh = state.warehouses.find((w) => w.managerId === keeperId);
+  if (managedWh) {
+    throw new Error(
+      `该员工正担任仓库「${managedWh.warehouseName}」主负责人，请先变更仓库负责人后再删除`
+    );
+  }
+  const next = cloneState(state);
+  next.keepers.splice(idx, 1);
+  return { state: next };
+}
+
+export function updateSupplier(
+  state: WmsState,
+  supplierCode: string,
+  input: Omit<Supplier, 'supplierCode'> & { supplierCode?: string }
+): { state: WmsState; supplier: Supplier } {
+  const code = supplierCode.trim().toUpperCase();
+  const idx = state.suppliers.findIndex((s) => s.supplierCode.toUpperCase() === code);
+  if (idx < 0) {
+    throw new Error(`供应商不存在: ${code}`);
+  }
+  const name = input.supplierName.trim();
+  if (!name) {
+    throw new Error('供应商名称不能为空');
+  }
+  const next = cloneState(state);
+  const canonicalCode = next.suppliers[idx].supplierCode;
+  const updated: Supplier = {
+    ...next.suppliers[idx],
+    ...input,
+    supplierCode: canonicalCode,
+    supplierName: name,
+    contactName: input.contactName.trim() || '商务联系人',
+    phone: input.phone.trim() || '-',
+    categoryTags: input.categoryTags.trim() || '电子元器件',
+    leadTimeDays: Math.max(1, Number(input.leadTimeDays) || 7),
+  };
+  next.suppliers[idx] = updated;
+
+  for (const m of next.materials) {
+    if (m.supplierCode === canonicalCode) {
+      m.supplierName = updated.supplierName;
+    }
+    if (m.ownershipType === 'VMI_CONSIGNED' && m.ownerCode === canonicalCode) {
+      m.ownerName = updated.supplierName;
+    }
+  }
+  for (const rule of next.barcodeRules) {
+    if (rule.supplierCode === canonicalCode) {
+      rule.supplierName = updated.supplierName;
+    }
+  }
+  return { state: next, supplier: updated };
+}
+
+export function deleteSupplier(
+  state: WmsState,
+  supplierCode: string
+): { state: WmsState } {
+  const code = supplierCode.trim().toUpperCase();
+  const idx = state.suppliers.findIndex((s) => s.supplierCode.toUpperCase() === code);
+  if (idx < 0) {
+    throw new Error(`供应商不存在: ${code}`);
+  }
+  const matRef = state.materials.find(
+    (m) =>
+      m.supplierCode?.toUpperCase() === code ||
+      (m.ownershipType === 'VMI_CONSIGNED' && m.ownerCode?.toUpperCase() === code)
+  );
+  if (matRef) {
+    throw new Error(`供应商 ${code} 已被物料主数据 (${matRef.skuCode}) 引用，无法删除`);
+  }
+  const asnRef = state.asns.find(
+    (a) =>
+      (a.status === 'PENDING' || a.status === 'PARTIAL') &&
+      a.supplierCode.toUpperCase() === code
+  );
+  if (asnRef) {
+    throw new Error(`供应商 ${code} 存在未完结 ASN (${asnRef.asnNo})，无法删除`);
+  }
+  const ruleRef = state.barcodeRules.find((r) => r.supplierCode.toUpperCase() === code);
+  if (ruleRef) {
+    throw new Error(`供应商 ${code} 绑定了条码规则 (${ruleRef.ruleName})，请先删除规则`);
+  }
+  const next = cloneState(state);
+  next.suppliers.splice(idx, 1);
+  return { state: next };
+}
+
+export function updateCustomer(
+  state: WmsState,
+  customerCode: string,
+  input: Omit<Customer, 'customerCode'> & { customerCode?: string }
+): { state: WmsState; customer: Customer } {
+  const code = customerCode.trim().toUpperCase();
+  const idx = state.customers.findIndex((c) => c.customerCode.toUpperCase() === code);
+  if (idx < 0) {
+    throw new Error(`客户不存在: ${code}`);
+  }
+  const name = input.customerName.trim();
+  if (!name) {
+    throw new Error('客户名称不能为空');
+  }
+  const next = cloneState(state);
+  const canonicalCode = next.customers[idx].customerCode;
+  const updated: Customer = {
+    ...next.customers[idx],
+    ...input,
+    customerCode: canonicalCode,
+    customerName: name,
+    contactName: input.contactName.trim() || 'PMC/SQE',
+    phone: input.phone.trim() || '-',
+    industry: input.industry.trim() || '电子制造PCBA',
+    traceRequirement: input.traceRequirement.trim() || '需IPC-1782全程UID追溯',
+    deliveryAddress: input.deliveryAddress.trim() || '待补充交付地址',
+  };
+  next.customers[idx] = updated;
+
+  for (const m of next.materials) {
+    if (m.customerCode === canonicalCode) m.customerName = updated.customerName;
+    if (m.ownershipType === 'CUSTOMER_CONSIGNED' && m.ownerCode === canonicalCode) {
+      m.ownerName = updated.customerName;
+    }
+  }
+  for (const r of next.reels) {
+    if (r.customerCode === canonicalCode) r.customerName = updated.customerName;
+    if (r.ownershipType === 'CUSTOMER_CONSIGNED' && r.ownerCode === canonicalCode) {
+      r.ownerName = updated.customerName;
+    }
+  }
+  for (const b of next.boms) {
+    if (b.customerCode === canonicalCode) b.customerName = updated.customerName;
+  }
+  for (const wo of next.workOrders) {
+    if (wo.status !== 'COMPLETED' && wo.customerCode === canonicalCode) {
+      wo.customerName = updated.customerName;
+    }
+  }
+  return { state: next, customer: updated };
+}
+
+export function deleteCustomer(
+  state: WmsState,
+  customerCode: string
+): { state: WmsState } {
+  const code = customerCode.trim().toUpperCase();
+  const idx = state.customers.findIndex((c) => c.customerCode.toUpperCase() === code);
+  if (idx < 0) {
+    throw new Error(`客户不存在: ${code}`);
+  }
+  const matRef = state.materials.find(
+    (m) =>
+      m.customerCode?.toUpperCase() === code ||
+      (m.ownershipType === 'CUSTOMER_CONSIGNED' && m.ownerCode?.toUpperCase() === code)
+  );
+  if (matRef) {
+    throw new Error(`客户 ${code} 已被物料主数据 (${matRef.skuCode}) 绑定，无法删除`);
+  }
+  const bomRef = state.boms.find((b) => b.customerCode?.toUpperCase() === code);
+  if (bomRef) {
+    throw new Error(`客户 ${code} 已关联机型 BOM (${bomRef.productCode})，无法删除`);
+  }
+  const woRef = state.workOrders.find(
+    (w) => w.status !== 'COMPLETED' && w.customerCode?.toUpperCase() === code
+  );
+  if (woRef) {
+    throw new Error(`客户 ${code} 关联有在制工单 (${woRef.workOrderId})，无法删除`);
+  }
+  const next = cloneState(state);
+  next.customers.splice(idx, 1);
+  return { state: next };
+}
+
+export function deleteBomMaster(
+  state: WmsState,
+  bomId: string
+): { state: WmsState } {
+  const idx = state.boms.findIndex((b) => b.bomId === bomId);
+  if (idx < 0) {
+    throw new Error(`机型 BOM 不存在: ${bomId}`);
+  }
+  const target = state.boms[idx];
+  const woRef = state.workOrders.find(
+    (w) => w.status !== 'COMPLETED' && w.bomId === bomId
+  );
+  if (woRef) {
+    throw new Error(`机型 BOM (${target.productCode}) 已被工单 ${woRef.workOrderId} 引用，无法删除`);
+  }
+  const next = cloneState(state);
+  next.boms.splice(idx, 1);
+  return { state: next };
+}
+
+
 
 

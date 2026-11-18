@@ -1,21 +1,31 @@
-import { Plus } from 'lucide-react';
+import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import type { Customer, Supplier, WmsState } from '../types/wms';
 
 interface PartnerMasterPanelProps {
   state: WmsState;
   onAddSupplier: (payload: Supplier) => Promise<void>;
+  onUpdateSupplier: (code: string, payload: Omit<Supplier, 'supplierCode'>) => Promise<void>;
+  onDeleteSupplier: (code: string) => Promise<void>;
   onAddCustomer: (payload: Customer) => Promise<void>;
+  onUpdateCustomer: (code: string, payload: Omit<Customer, 'customerCode'>) => Promise<void>;
+  onDeleteCustomer: (code: string) => Promise<void>;
 }
 
 export function PartnerMasterPanel({
   state,
   onAddSupplier,
+  onUpdateSupplier,
+  onDeleteSupplier,
   onAddCustomer,
+  onUpdateCustomer,
+  onDeleteCustomer,
 }: PartnerMasterPanelProps) {
   const [subTab, setSubTab] = useState<'suppliers' | 'customers'>('suppliers');
 
   // Supplier form
+  const [editingSupCode, setEditingSupCode] = useState<string | null>(null);
+  const [confirmDeleteSupCode, setConfirmDeleteSupCode] = useState<string | null>(null);
   const [supCode, setSupCode] = useState('');
   const [supName, setSupName] = useState('');
   const [supContact, setSupContact] = useState('');
@@ -26,6 +36,8 @@ export function PartnerMasterPanel({
   const [supNotes, setSupNotes] = useState('');
 
   // Customer form
+  const [editingCusCode, setEditingCusCode] = useState<string | null>(null);
+  const [confirmDeleteCusCode, setConfirmDeleteCusCode] = useState<string | null>(null);
   const [cusCode, setCusCode] = useState('');
   const [cusName, setCusName] = useState('');
   const [cusContact, setCusContact] = useState('');
@@ -37,30 +49,103 @@ export function PartnerMasterPanel({
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const resetSupForm = () => {
+    setEditingSupCode(null);
+    setSupCode('');
+    setSupName('');
+    setSupContact('');
+    setSupPhone('');
+    setSupTags('IC芯片 / 阻容感');
+    setSupGrade('B级抽检');
+    setSupLead('7');
+    setSupNotes('');
+  };
+
+  const startEditSup = (s: Supplier) => {
+    setEditingSupCode(s.supplierCode);
+    setSupCode(s.supplierCode);
+    setSupName(s.supplierName);
+    setSupContact(s.contactName);
+    setSupPhone(s.phone);
+    setSupTags(s.categoryTags);
+    setSupGrade(s.qualityGrade);
+    setSupLead(String(s.leadTimeDays));
+    setSupNotes(s.notes ?? '');
+    setErr(null);
+    setMsg(null);
+  };
+
   const handleSupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     setMsg(null);
     try {
-      await onAddSupplier({
-        supplierCode: supCode,
-        supplierName: supName,
-        contactName: supContact,
-        phone: supPhone,
-        categoryTags: supTags,
-        qualityGrade: supGrade,
-        leadTimeDays: Number(supLead) || 7,
-        notes: supNotes,
-      });
-      setMsg(`已新增供应商 ${supName}`);
-      setSupCode('');
-      setSupName('');
-      setSupContact('');
-      setSupPhone('');
-      setSupNotes('');
+      if (editingSupCode) {
+        await onUpdateSupplier(editingSupCode, {
+          supplierName: supName,
+          contactName: supContact,
+          phone: supPhone,
+          categoryTags: supTags,
+          qualityGrade: supGrade,
+          leadTimeDays: Number(supLead) || 7,
+          notes: supNotes,
+        });
+        setMsg(`已更新供应商 ${supName}`);
+      } else {
+        await onAddSupplier({
+          supplierCode: supCode,
+          supplierName: supName,
+          contactName: supContact,
+          phone: supPhone,
+          categoryTags: supTags,
+          qualityGrade: supGrade,
+          leadTimeDays: Number(supLead) || 7,
+          notes: supNotes,
+        });
+        setMsg(`已新增供应商 ${supName}`);
+      }
+      resetSupForm();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '新增供应商失败');
+      setErr(e instanceof Error ? e.message : '保存供应商失败');
     }
+  };
+
+  const handleConfirmDeleteSup = async (code: string) => {
+    setErr(null);
+    setMsg(null);
+    try {
+      await onDeleteSupplier(code);
+      if (editingSupCode === code) resetSupForm();
+      setConfirmDeleteSupCode(null);
+      setMsg(`已删除供应商 ${code}`);
+    } catch (e) {
+      setConfirmDeleteSupCode(null);
+      setErr(e instanceof Error ? e.message : '删除供应商失败');
+    }
+  };
+
+  const resetCusForm = () => {
+    setEditingCusCode(null);
+    setCusCode('');
+    setCusName('');
+    setCusContact('');
+    setCusPhone('');
+    setCusIndustry('工业控制PCBA');
+    setCusTrace('需IPC-1782全程UID+DateCode追溯');
+    setCusAddr('');
+  };
+
+  const startEditCus = (c: Customer) => {
+    setEditingCusCode(c.customerCode);
+    setCusCode(c.customerCode);
+    setCusName(c.customerName);
+    setCusContact(c.contactName);
+    setCusPhone(c.phone);
+    setCusIndustry(c.industry);
+    setCusTrace(c.traceRequirement);
+    setCusAddr(c.deliveryAddress);
+    setErr(null);
+    setMsg(null);
   };
 
   const handleCusSubmit = async (e: React.FormEvent) => {
@@ -68,23 +153,45 @@ export function PartnerMasterPanel({
     setErr(null);
     setMsg(null);
     try {
-      await onAddCustomer({
-        customerCode: cusCode,
-        customerName: cusName,
-        contactName: cusContact,
-        phone: cusPhone,
-        industry: cusIndustry,
-        traceRequirement: cusTrace,
-        deliveryAddress: cusAddr,
-      });
-      setMsg(`已新增客户 ${cusName}`);
-      setCusCode('');
-      setCusName('');
-      setCusContact('');
-      setCusPhone('');
-      setCusAddr('');
+      if (editingCusCode) {
+        await onUpdateCustomer(editingCusCode, {
+          customerName: cusName,
+          contactName: cusContact,
+          phone: cusPhone,
+          industry: cusIndustry,
+          traceRequirement: cusTrace,
+          deliveryAddress: cusAddr,
+        });
+        setMsg(`已更新客户 ${cusName}`);
+      } else {
+        await onAddCustomer({
+          customerCode: cusCode,
+          customerName: cusName,
+          contactName: cusContact,
+          phone: cusPhone,
+          industry: cusIndustry,
+          traceRequirement: cusTrace,
+          deliveryAddress: cusAddr,
+        });
+        setMsg(`已新增客户 ${cusName}`);
+      }
+      resetCusForm();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '新增客户失败');
+      setErr(e instanceof Error ? e.message : '保存客户失败');
+    }
+  };
+
+  const handleConfirmDeleteCus = async (code: string) => {
+    setErr(null);
+    setMsg(null);
+    try {
+      await onDeleteCustomer(code);
+      if (editingCusCode === code) resetCusForm();
+      setConfirmDeleteCusCode(null);
+      setMsg(`已删除客户 ${code}`);
+    } catch (e) {
+      setConfirmDeleteCusCode(null);
+      setErr(e instanceof Error ? e.message : '删除客户失败');
     }
   };
 
@@ -126,9 +233,21 @@ export function PartnerMasterPanel({
       {subTab === 'suppliers' ? (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
           <section className="rounded-lg border border-slate-200 bg-white p-5 xl:col-span-4">
-            <h2 className="border-b border-slate-200 pb-3 text-sm font-semibold text-slate-900">
-              新增电子料供应商档案
-            </h2>
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h2 className="text-sm font-semibold text-slate-900">
+                {editingSupCode ? `修改供应商 (${editingSupCode})` : '新增电子料供应商档案'}
+              </h2>
+              {editingSupCode && (
+                <button
+                  type="button"
+                  onClick={resetSupForm}
+                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600"
+                >
+                  <X className="h-3 w-3" />
+                  取消
+                </button>
+              )}
+            </div>
             <form onSubmit={handleSupSubmit} className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
@@ -139,10 +258,13 @@ export function PartnerMasterPanel({
                     id="s-code"
                     type="text"
                     required
+                    readOnly={Boolean(editingSupCode)}
                     value={supCode}
                     onChange={(e) => setSupCode(e.target.value)}
                     placeholder="SUP-MOUSER"
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 font-mono text-xs"
+                    className={`mt-1 w-full rounded-md border px-2.5 py-1.5 font-mono text-xs ${
+                      editingSupCode ? 'border-slate-200 bg-slate-100 text-slate-500' : 'border-slate-300'
+                    }`}
                   />
                 </div>
                 <div>
@@ -245,7 +367,7 @@ export function PartnerMasterPanel({
               </div>
 
               {err && (
-                <div className="rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
+                <div role="alert" className="rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
                   {err}
                 </div>
               )}
@@ -259,8 +381,8 @@ export function PartnerMasterPanel({
                 type="submit"
                 className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
               >
-                <Plus className="h-3.5 w-3.5" />
-                保存供应商档案
+                {editingSupCode ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                {editingSupCode ? '保存供应商修改' : '保存供应商档案'}
               </button>
             </form>
           </section>
@@ -275,46 +397,93 @@ export function PartnerMasterPanel({
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-5 py-2.5 font-medium whitespace-nowrap">编码 / 供应商名称</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">主供类别</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">IQC等级</th>
-                    <th className="px-4 py-2.5 font-medium text-right whitespace-nowrap">交期</th>
-                    <th className="px-5 py-2.5 font-medium whitespace-nowrap">联系人 / 电话</th>
+                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">编码 / 供应商名称</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">主供类别</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">IQC等级</th>
+                    <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">交期</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">联系人 / 电话</th>
+                    <th className="px-4 py-2.5 font-medium text-right whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {state.suppliers.map((s) => (
-                    <tr key={s.supplierCode} className="hover:bg-slate-50">
-                      <td className="px-5 py-3">
-                        <div className="font-semibold text-slate-900">{s.supplierName}</div>
-                        <div className="font-mono text-[11px] text-slate-500">{s.supplierCode}</div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        <div>{s.categoryTags}</div>
-                        {s.notes && <div className="text-[11px] text-slate-400">{s.notes}</div>}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`font-medium ${
-                            s.qualityGrade === 'A级免检'
-                              ? 'text-emerald-700'
-                              : s.qualityGrade === 'C级加严'
-                                ? 'text-red-700'
-                                : 'text-amber-700'
-                          }`}
-                        >
-                          {s.qualityGrade}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums whitespace-nowrap">
-                        {s.leadTimeDays} 天
-                      </td>
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <div className="text-slate-800">{s.contactName}</div>
-                        <div className="font-mono text-[11px] text-slate-500">{s.phone}</div>
-                      </td>
-                    </tr>
-                  ))}
+                  {state.suppliers.map((s) => {
+                    const isConfirming = confirmDeleteSupCode === s.supplierCode;
+                    return (
+                      <tr
+                        key={s.supplierCode}
+                        className={`hover:bg-slate-50 ${
+                          editingSupCode === s.supplierCode ? 'bg-sky-50/40' : ''
+                        }`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-900">{s.supplierName}</div>
+                          <div className="font-mono text-[11px] text-slate-500">{s.supplierCode}</div>
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">
+                          <div>{s.categoryTags}</div>
+                          {s.notes && <div className="text-[11px] text-slate-400">{s.notes}</div>}
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <span
+                            className={`font-medium ${
+                              s.qualityGrade === 'A级免检'
+                                ? 'text-emerald-700'
+                                : s.qualityGrade === 'C级加严'
+                                  ? 'text-red-700'
+                                  : 'text-amber-700'
+                            }`}
+                          >
+                            {s.qualityGrade}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono tabular-nums whitespace-nowrap">
+                          {s.leadTimeDays} 天
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <div className="text-slate-800">{s.contactName}</div>
+                          <div className="font-mono text-[11px] text-slate-500">{s.phone}</div>
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {isConfirming ? (
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmDeleteSup(s.supplierCode)}
+                                className="rounded bg-red-600 px-2 py-0.5 text-[11px] font-medium text-white"
+                              >
+                                确认?
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteSupCode(null)}
+                                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-600"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => startEditSup(s)}
+                                className="font-medium text-sky-700 hover:text-sky-900"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteSupCode(s.supplierCode)}
+                                aria-label={`删除供应商 ${s.supplierCode}`}
+                                className="text-slate-400 hover:text-red-600"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -323,9 +492,21 @@ export function PartnerMasterPanel({
       ) : (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
           <section className="rounded-lg border border-slate-200 bg-white p-5 xl:col-span-4">
-            <h2 className="border-b border-slate-200 pb-3 text-sm font-semibold text-slate-900">
-              新增客户档案 (PCBA交付方)
-            </h2>
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h2 className="text-sm font-semibold text-slate-900">
+                {editingCusCode ? `修改客户 (${editingCusCode})` : '新增客户档案 (PCBA交付方)'}
+              </h2>
+              {editingCusCode && (
+                <button
+                  type="button"
+                  onClick={resetCusForm}
+                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600"
+                >
+                  <X className="h-3 w-3" />
+                  取消
+                </button>
+              )}
+            </div>
             <form onSubmit={handleCusSubmit} className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
@@ -336,10 +517,13 @@ export function PartnerMasterPanel({
                     id="c-code"
                     type="text"
                     required
+                    readOnly={Boolean(editingCusCode)}
                     value={cusCode}
                     onChange={(e) => setCusCode(e.target.value)}
                     placeholder="CUS-BYD"
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 font-mono text-xs"
+                    className={`mt-1 w-full rounded-md border px-2.5 py-1.5 font-mono text-xs ${
+                      editingCusCode ? 'border-slate-200 bg-slate-100 text-slate-500' : 'border-slate-300'
+                    }`}
                   />
                 </div>
                 <div>
@@ -424,7 +608,7 @@ export function PartnerMasterPanel({
               </div>
 
               {err && (
-                <div className="rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
+                <div role="alert" className="rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
                   {err}
                 </div>
               )}
@@ -438,8 +622,8 @@ export function PartnerMasterPanel({
                 type="submit"
                 className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
               >
-                <Plus className="h-3.5 w-3.5" />
-                保存客户档案
+                {editingCusCode ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                {editingCusCode ? '保存客户修改' : '保存客户档案'}
               </button>
             </form>
           </section>
@@ -454,29 +638,76 @@ export function PartnerMasterPanel({
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-5 py-2.5 font-medium whitespace-nowrap">编码 / 客户名称</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">行业领域</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">追溯与质控要求</th>
-                    <th className="px-5 py-2.5 font-medium whitespace-nowrap">联系人 / 地址</th>
+                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">编码 / 客户名称</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">行业领域</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">追溯与质控要求</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">联系人 / 地址</th>
+                    <th className="px-4 py-2.5 font-medium text-right whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {state.customers.map((c) => (
-                    <tr key={c.customerCode} className="hover:bg-slate-50">
-                      <td className="px-5 py-3">
-                        <div className="font-semibold text-slate-900">{c.customerName}</div>
-                        <div className="font-mono text-[11px] text-slate-500">{c.customerCode}</div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">{c.industry}</td>
-                      <td className="px-4 py-3 text-slate-700">{c.traceRequirement}</td>
-                      <td className="px-5 py-3">
-                        <div className="text-slate-800">
-                          {c.contactName} · <span className="font-mono">{c.phone}</span>
-                        </div>
-                        <div className="text-[11px] text-slate-500">{c.deliveryAddress}</div>
-                      </td>
-                    </tr>
-                  ))}
+                  {state.customers.map((c) => {
+                    const isConfirming = confirmDeleteCusCode === c.customerCode;
+                    return (
+                      <tr
+                        key={c.customerCode}
+                        className={`hover:bg-slate-50 ${
+                          editingCusCode === c.customerCode ? 'bg-sky-50/40' : ''
+                        }`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-900">{c.customerName}</div>
+                          <div className="font-mono text-[11px] text-slate-500">{c.customerCode}</div>
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">{c.industry}</td>
+                        <td className="px-3 py-3 text-slate-700">{c.traceRequirement}</td>
+                        <td className="px-3 py-3">
+                          <div className="text-slate-800">
+                            {c.contactName} · <span className="font-mono">{c.phone}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500">{c.deliveryAddress}</div>
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {isConfirming ? (
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmDeleteCus(c.customerCode)}
+                                className="rounded bg-red-600 px-2 py-0.5 text-[11px] font-medium text-white"
+                              >
+                                确认?
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteCusCode(null)}
+                                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-600"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => startEditCus(c)}
+                                className="font-medium text-sky-700 hover:text-sky-900"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteCusCode(c.customerCode)}
+                                aria-label={`删除客户 ${c.customerCode}`}
+                                className="text-slate-400 hover:text-red-600"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

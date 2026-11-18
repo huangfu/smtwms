@@ -8,6 +8,7 @@ import { AsnManagerPanel } from './AsnManagerPanel';
 interface InboundViewProps {
   state: WmsState;
   onInbound: (payload: {
+    materialKey?: string;
     skuCode: string;
     lotNumber: string;
     dateCode: string;
@@ -65,6 +66,10 @@ export function InboundView({
   const [selectedAsnLineId, setSelectedAsnLineId] = useState('');
 
   const [scanBuffer, setScanBuffer] = useState('');
+  const [matchedRuleHint, setMatchedRuleHint] = useState<string | null>(null);
+  const [materialKey, setMaterialKey] = useState(
+    defaultMaterial?.materialKey ?? defaultMaterial?.skuCode ?? ''
+  );
   const [skuCode, setSkuCode] = useState(defaultMaterial?.skuCode ?? '');
   const [lotNumber, setLotNumber] = useState('');
   const [dateCode, setDateCode] = useState('2646');
@@ -86,6 +91,7 @@ export function InboundView({
     const mat = state.materials.find((m) => m.skuCode === initialSkuCode);
     if (!mat) return;
     setSubTab('receive');
+    setMaterialKey(mat.materialKey ?? mat.skuCode);
     setSkuCode(mat.skuCode);
     setBinCode(mat.defaultBin);
     if (mat.safetyStock > 0) {
@@ -115,6 +121,8 @@ export function InboundView({
     setReason(`按ASN预约单 (${asn.asnNo} / ${asn.poNo}) 到货IQC合格入库`);
     if (targetLine) {
       setSelectedAsnLineId(targetLine.lineId);
+      const matchedMat = state.materials.find((m) => m.skuCode === targetLine.skuCode);
+      setMaterialKey(matchedMat?.materialKey ?? targetLine.skuCode);
       setSkuCode(targetLine.skuCode);
       const rem = Math.max(1, targetLine.expectedQty - targetLine.receivedQty);
       setQty(String(rem));
@@ -145,22 +153,28 @@ export function InboundView({
     applyAsnLineToForm(activeAsn, lineId);
   };
 
-  const handleMaterialChange = (newSku: string) => {
-    setSkuCode(newSku);
-    const mat = state.materials.find((m) => m.skuCode === newSku);
+  const handleMaterialChange = (keyOrSku: string) => {
+    setMaterialKey(keyOrSku);
+    const mat =
+      state.materials.find((m) => m.materialKey === keyOrSku) ??
+      state.materials.find((m) => m.skuCode === keyOrSku);
     if (mat) {
+      setSkuCode(mat.skuCode);
       setBinCode(mat.defaultBin);
+      if (mat.supplierName) setSupplier(mat.supplierName);
     }
   };
 
   const handleParseComposite = (raw: string) => {
     setScanBuffer(raw);
-    const parsed = parseBarcodeString(raw);
+    const parsed = parseBarcodeString(raw, state.barcodeRules, supplier);
+    setMatchedRuleHint(parsed.matchedRuleName ?? null);
     if (parsed.mpn) {
       const mat = state.materials.find(
         (m) => m.mpn.toUpperCase() === parsed.mpn!.toUpperCase()
       );
       if (mat) {
+        setMaterialKey(mat.materialKey ?? mat.skuCode);
         setSkuCode(mat.skuCode);
         setBinCode(mat.defaultBin);
       }
@@ -168,11 +182,13 @@ export function InboundView({
     if (parsed.lotNumber) setLotNumber(parsed.lotNumber);
     if (parsed.dateCode) setDateCode(parsed.dateCode);
     if (parsed.qty) setQty(String(parsed.qty));
-    if (parsed.reelId && raw.includes('|')) setReelId(parsed.reelId);
+    if (parsed.reelId && (raw.includes('|') || raw.includes(';') || raw.includes(','))) {
+      setReelId(parsed.reelId);
+    }
   };
 
   const fillSampleComposite = () => {
-    handleParseComposite('UID:RL261117-901|P:STM32F407VET6|L:ST2646N8|D:2646|Q:1000');
+    handleParseComposite('STM32F407VET6;ST2646A9;2646;1000;RL261117-901');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -181,6 +197,7 @@ export function InboundView({
     setSubmitting(true);
     try {
       const created = await onInbound({
+        materialKey: materialKey || undefined,
         skuCode,
         lotNumber,
         dateCode,
@@ -198,6 +215,7 @@ export function InboundView({
       setLotNumber('');
       setReelId('');
       setScanBuffer('');
+      setMatchedRuleHint(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : '入库提交失败');
     } finally {
@@ -205,7 +223,9 @@ export function InboundView({
     }
   };
 
-  const selectedMaterial = state.materials.find((m) => m.skuCode === skuCode);
+  const selectedMaterial =
+    state.materials.find((m) => m.materialKey === materialKey) ??
+    state.materials.find((m) => m.skuCode === skuCode);
   const recentInboundReels = state.reels.slice(0, 10);
 
   return (
@@ -346,32 +366,53 @@ export function InboundView({
                 type="text"
                 value={scanBuffer}
                 onChange={(e) => handleParseComposite(e.target.value)}
-                placeholder="例如: UID:RL261117-901|P:STM32F407VET6|L:ST2646N8|D:2646|Q:1000"
+                placeholder="支持原厂复合码或供应商定制规则（如 Arrow/Yageo）"
                 className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-900 focus:border-sky-600 focus:outline-none"
               />
+              {matchedRuleHint && (
+                <div className="mt-1.5 text-[11px] font-medium text-emerald-700">
+                  已命中供应商规则：{matchedRuleHint}
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleSubmit} className="mt-4 space-y-4">
               <div>
                 <label htmlFor="in-sku" className="block text-xs font-medium text-slate-700">
-                  物料编码 / MPN <span className="text-red-600">*</span>
+                  物料编码 / 业务归属 <span className="text-red-600">*</span>
                 </label>
                 <select
                   id="in-sku"
-                  value={skuCode}
+                  value={materialKey}
                   onChange={(e) => handleMaterialChange(e.target.value)}
                   className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-600 focus:outline-none"
                 >
-                  {state.materials.map((m) => (
-                    <option key={m.skuCode} value={m.skuCode}>
-                      {m.mpn} — {m.name} ({m.msdLevel})
-                    </option>
-                  ))}
+                  {state.materials.map((m) => {
+                    const key = m.materialKey ?? m.skuCode;
+                    const cusLabel = m.customerCode
+                      ? `限${m.customerName || m.customerCode}`
+                      : '通用共享';
+                    return (
+                      <option key={key} value={key}>
+                        {m.mpn} [{m.ownerName || '本厂自购'} · {cusLabel}] — {m.name} ({m.msdLevel})
+                      </option>
+                    );
+                  })}
                 </select>
                 {selectedMaterial && (
                   <div className="mt-1 text-[11px] text-slate-500">
-                    编码 {selectedMaterial.skuCode} · 封装 {selectedMaterial.packageType} · 默认库位{' '}
-                    <span className="font-mono">{selectedMaterial.defaultBin}</span>
+                    料号 {selectedMaterial.skuCode} · 产权{' '}
+                    <span className="font-semibold text-slate-700">
+                      {selectedMaterial.ownerName || '本厂自购'}
+                    </span>{' '}
+                    · 准入{' '}
+                    <span className="font-semibold text-sky-800">
+                      {selectedMaterial.customerCode
+                        ? `专备 ${selectedMaterial.customerName || selectedMaterial.customerCode}`
+                        : '通用共享 (不限客户)'}
+                    </span>{' '}
+                    · 包装 {selectedMaterial.packagingName || selectedMaterial.packageType} (MPQ{' '}
+                    <span className="font-mono">{selectedMaterial.mpq ?? '-'}</span>)
                   </div>
                 )}
               </div>
@@ -584,48 +625,61 @@ export function InboundView({
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-5 py-2.5 font-medium whitespace-nowrap">料盘 UID</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">MPN / 批次 / 周期</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">上架库位 / 单据</th>
-                    <th className="px-4 py-2.5 font-medium text-right whitespace-nowrap">初始/当前数量</th>
-                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">入库时间</th>
-                    <th className="px-5 py-2.5 font-medium text-right whitespace-nowrap">操作</th>
+                    <th className="px-3.5 py-2.5 font-medium whitespace-nowrap">料盘 UID / 准入</th>
+                    <th className="px-2.5 py-2.5 font-medium whitespace-nowrap">MPN / 批次 / 周期</th>
+                    <th className="px-2.5 py-2.5 font-medium whitespace-nowrap">库位 / 单据</th>
+                    <th className="px-2.5 py-2.5 font-medium text-right whitespace-nowrap">余量 / 时间</th>
+                    <th className="px-3.5 py-2.5 font-medium text-right whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {recentInboundReels.map((reel) => (
                     <tr key={reel.reelId} className="hover:bg-slate-50">
-                      <td className="px-5 py-3 font-mono font-semibold text-slate-900 whitespace-nowrap">
-                        {reel.reelId}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-mono font-medium text-slate-900">{reel.mpn}</div>
-                        <div className="font-mono text-[11px] text-slate-500">
-                          Lot {reel.lotNumber} · D/C {reel.dateCode} · {reel.msdLevel}
+                      <td className="px-3.5 py-2.5 whitespace-nowrap">
+                        <div className="font-mono font-semibold text-slate-900">{reel.reelId}</div>
+                        <div
+                          title={reel.customerName || '通用共享'}
+                          className="max-w-[125px] truncate text-[11px] text-slate-500"
+                        >
+                          {reel.customerCode
+                            ? `限[${reel.customerName || reel.customerCode}]`
+                            : '通用共享'}
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-2.5 py-2.5">
+                        <div className="font-mono font-medium text-slate-900">{reel.mpn}</div>
+                        <div className="font-mono text-[11px] text-slate-500">
+                          {reel.lotNumber} · {reel.dateCode} · {reel.msdLevel}
+                        </div>
+                      </td>
+                      <td className="px-2.5 py-2.5 whitespace-nowrap">
                         <div className="font-mono text-slate-800">{reel.binCode}</div>
                         <div className="font-mono text-[11px] text-slate-400">
                           {reel.asnNo || reel.receiptDocNo}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums whitespace-nowrap">
-                        <span className="font-semibold text-slate-900">{reel.qty.toLocaleString()}</span>
-                        <span className="text-slate-400"> / {reel.initialQty.toLocaleString()}</span>
+                      <td className="px-2.5 py-2.5 text-right font-mono tabular-nums whitespace-nowrap">
+                        <div>
+                          <span className="font-semibold text-slate-900">
+                            {reel.qty.toLocaleString()}
+                          </span>
+                          <span className="text-slate-400">
+                            /{reel.initialQty.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          {formatTime(reel.receivedAt).slice(5)}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 font-mono text-slate-500 whitespace-nowrap">
-                        {formatTime(reel.receivedAt)}
-                      </td>
-                      <td className="px-5 py-3 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-3">
+                      <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => onOpenLabel(reel)}
                             className="inline-flex items-center gap-1 font-medium text-sky-700 hover:text-sky-800"
                           >
                             <Barcode className="h-3.5 w-3.5" />
-                            打印标签
+                            打印
                           </button>
                           <button
                             type="button"

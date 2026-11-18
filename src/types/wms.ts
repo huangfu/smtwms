@@ -76,24 +76,141 @@ export interface Customer {
   deliveryAddress: string;
 }
 
+export type MaterialOwnershipType =
+  | 'SELF_PURCHASED'
+  | 'CUSTOMER_CONSIGNED'
+  | 'VMI_CONSIGNED';
+
+export type PackagingCarrierType =
+  | 'REEL'
+  | 'TRAY'
+  | 'TUBE'
+  | 'BAG_BOTTLE'
+  | 'CUT_TAPE'
+  | 'BULK';
+
+export interface PackagingSpec {
+  packagingCode: string;
+  packagingName: string;
+  carrierType: PackagingCarrierType;
+  reelDiameter: string;
+  tapeWidthMm: number;
+  pitchMm: number;
+  defaultSpq: number;
+  allowSplit: boolean;
+  allowMerge: boolean;
+  description: string;
+}
+
+export interface BarcodeRule {
+  ruleId: string;
+  ruleName: string;
+  supplierCode: string;
+  supplierName: string;
+  formatType: 'KEY_VALUE' | 'DELIMITED_ORDER';
+  delimiter: '|' | ';' | ',';
+  fieldMap: {
+    reelIdKey?: string;
+    mpnKey?: string;
+    lotKey?: string;
+    dateCodeKey?: string;
+    qtyKey?: string;
+  };
+  sampleBarcode: string;
+  enabled: boolean;
+}
+
+export type ZebraPrinterMode = 'LAN_TCP' | 'BROWSER_PRINT' | 'DRIVER_PRINT';
+
+export interface ZebraPrinterConfig {
+  mode: ZebraPrinterMode;
+  host: string;
+  port: number;
+  browserPrintUrl: string;
+  selectedDeviceName?: string;
+  darkness: number;
+  printSpeed: number;
+}
+
+export type LabelBarcodeType = 'CODE128' | 'QR' | 'DATAMATRIX';
+
+export type LabelElementKey =
+  | 'header'
+  | 'mpnQty'
+  | 'lotDcBin'
+  | 'ownership'
+  | 'packagingMpq'
+  | 'supplier'
+  | 'barcode'
+  | 'composite'
+  | 'footer';
+
+export type LabelFontScale = 'COMPACT' | 'STANDARD' | 'LARGE';
+
+export interface LabelTemplate {
+  templateId: string;
+  templateName: string;
+  paperSize: '50x30mm' | '70x40mm' | '100x60mm';
+  dpi?: 203 | 300;
+  barcodeType?: LabelBarcodeType;
+  zplMode?: 'VISUAL' | 'CUSTOM_ZPL';
+  elementOrder?: LabelElementKey[];
+  fontScale?: LabelFontScale;
+  barcodeHeightMm?: number;
+  customZpl?: string;
+  headerTitle: string;
+  footerNote: string;
+  showFields: {
+    mpn: boolean;
+    skuCode: boolean;
+    ownership: boolean;
+    packagingMpq: boolean;
+    supplier: boolean;
+    lotDateCode: boolean;
+    binMsd: boolean;
+    compositeBarcode: boolean;
+  };
+  isDefault: boolean;
+}
+
 export interface MaterialSku {
+  materialKey?: string;
   skuCode: string;
   mpn: string;
   name: string;
+  ownershipType?: MaterialOwnershipType;
+  ownerCode?: string;
+  ownerName?: string;
+  /** 业务对应客户（空/undefined 代表通用共享，所有客户工单均可发料；指定客户则仅限对应客户工单发料） */
+  customerCode?: string;
+  customerName?: string;
   manufacturer: string;
   category: MaterialCategory;
   packageType: string;
+  packagingCode?: string;
+  packagingName?: string;
+  mpq?: number;
+  supplierCode?: string;
+  supplierName?: string;
   unit: 'PCS' | '张' | '瓶' | '卷';
   msdLevel: MsdLevel;
   safetyStock: number;
   defaultBin: string;
 }
 
+export type BomItemRole = 'MAIN' | 'SPECIAL_MAIN' | 'SUBSTITUTE';
+
 export interface BomItem {
+  lineId?: string;
   skuCode: string;
   qtyPerBoard: number;
   attritionRate: number;
   designators: string;
+  itemRole?: BomItemRole;
+  substituteForSku?: string;
+  substitutePriority?: number;
+  substituteRatio?: number;
+  remark?: string;
 }
 
 export interface BomMaster {
@@ -147,11 +264,19 @@ export type ReelStatus =
 export interface ReelItem {
   reelId: string;
   parentReelId?: string;
+  materialKey?: string;
   skuCode: string;
   mpn: string;
   lotNumber: string;
   dateCode: string;
   supplier: string;
+  ownershipType?: MaterialOwnershipType;
+  ownerCode?: string;
+  ownerName?: string;
+  customerCode?: string;
+  customerName?: string;
+  packagingCode?: string;
+  mpq?: number;
   receiptDocNo: string;
   asnNo?: string;
   initialQty: number;
@@ -196,6 +321,8 @@ export interface WaveAllocation {
   id: string;
   skuCode: string;
   mpn: string;
+  customerCode?: string;
+  customerName?: string;
   reelId: string;
   binCode: string;
   dateCode: string;
@@ -283,10 +410,14 @@ export interface ScrapRecord {
 }
 
 export interface WmsState {
+  printerConfig?: ZebraPrinterConfig;
   warehouses: Warehouse[];
   keepers: WarehouseKeeper[];
   suppliers: Supplier[];
   customers: Customer[];
+  packagingSpecs: PackagingSpec[];
+  barcodeRules: BarcodeRule[];
+  labelTemplates: LabelTemplate[];
   boms: BomMaster[];
   asns: AsnOrder[];
   materials: MaterialSku[];

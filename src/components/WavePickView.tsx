@@ -213,7 +213,8 @@ export function WavePickView({
                                 {wo.productName} · {wo.targetQty} PCS
                               </div>
                               <div className="text-[11px] text-slate-500">
-                                线别 {wo.lineName} · BOM {wo.bom.length} 项
+                                线别 {wo.lineName} · 客户 {wo.customerName || '内部通用'} · BOM{' '}
+                                {wo.bom.length} 项
                               </div>
                             </div>
                           </div>
@@ -361,7 +362,10 @@ export function WavePickView({
                           <td className="px-3 py-2.5">
                             <div className="font-mono text-slate-900">{alloc.mpn}</div>
                             <div className="font-mono text-[11px] text-slate-500">
-                              D/C {alloc.dateCode} · Lot {alloc.lotNumber}
+                              D/C {alloc.dateCode} · Lot {alloc.lotNumber} ·{' '}
+                              <span className={alloc.customerCode ? 'text-sky-700 font-sans font-medium' : 'font-sans'}>
+                                {alloc.customerName || '通用共享'}
+                              </span>
                             </div>
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono font-semibold text-slate-900 tabular-nums">
@@ -422,7 +426,7 @@ export function WavePickView({
               >
                 {inStockReels.map((r) => (
                   <option key={r.reelId} value={r.reelId}>
-                    {r.reelId} | {r.mpn} | 余量 {r.qty} | 库位 {r.binCode}
+                    {r.reelId} | {r.mpn} | {r.customerCode ? `${r.customerName}专备` : '通用共享'} | 余量 {r.qty} | 库位 {r.binCode}
                   </option>
                 ))}
               </select>

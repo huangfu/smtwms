@@ -3,6 +3,7 @@ import {
   Boxes,
   ClipboardCheck,
   Database,
+  GitBranch,
   Layers,
   LayoutDashboard,
   RefreshCw,
@@ -17,16 +18,18 @@ export type NavKey =
   | 'replenish'
   | 'scrapCount'
   | 'trace'
+  | 'bom'
   | 'master';
 
 export const NAV_ITEMS: { key: NavKey; label: string; sub: string; icon: typeof LayoutDashboard }[] = [
   { key: 'dashboard', label: '仓储总览', sub: '运营看板与预警', icon: LayoutDashboard },
-  { key: 'inbound', label: '入库与ASN管理', sub: 'ASN预约/采购导入/赋码', icon: ArrowDownToLine },
+  { key: 'inbound', label: '入库与ASN管理', sub: 'ASN预约/扫码解析/赋码', icon: ArrowDownToLine },
   { key: 'wave', label: '波次发料与出库', sub: '工单BOM/FIFO拣货', icon: Layers },
   { key: 'replenish', label: '补料与退料', sub: 'SMT抛料补领/余料退库', icon: RefreshCw },
   { key: 'scrapCount', label: '报废与盘点', sub: 'MRB处置/盘点调账', icon: ClipboardCheck },
   { key: 'trace', label: '全程扫码追溯', sub: 'UID/批次/工单正反查', icon: ScanBarcode },
-  { key: 'master', label: '基础档案与台账', sub: '仓库/库位/客商/BOM/工单', icon: Database },
+  { key: 'bom', label: 'BOM清单与代用', sub: '机型特料/替代料单表', icon: GitBranch },
+  { key: 'master', label: '基础档案与台账', sub: '归属清单/包装SPQ/规则/仓库', icon: Database },
 ];
 
 interface SidebarProps {
