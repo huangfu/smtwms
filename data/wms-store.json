@@ -1,0 +1,994 @@
+{
+  "warehouses": [
+    {
+      "warehouseCode": "WH-SMT-01",
+      "warehouseName": "SMT一厂电子元器件主仓",
+      "warehouseType": "恒温防静电主仓 (22±3℃ / 30-60%RH)",
+      "managerId": "KPR-001",
+      "managerName": "张伟",
+      "address": "A栋1楼东侧 SMT电子主库区",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-01T08:00:00.000Z"
+    },
+    {
+      "warehouseCode": "WH-MSD-01",
+      "warehouseName": "MSD湿敏防潮恒温专仓",
+      "warehouseType": "超低湿防潮柜库 (<5%RH)",
+      "managerId": "KPR-003",
+      "managerName": "陈静",
+      "address": "A栋1楼IQC旁 防潮恒温区",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-01T08:00:00.000Z"
+    },
+    {
+      "warehouseCode": "WH-COLD-01",
+      "warehouseName": "锡膏冷链与PCB真空专仓",
+      "warehouseType": "2-10℃冷藏 + 真空防氧化库",
+      "managerId": "KPR-004",
+      "managerName": "王磊",
+      "address": "A栋1楼北侧 冷链/PCB区",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-01T08:00:00.000Z"
+    },
+    {
+      "warehouseCode": "WH-LINE-01",
+      "warehouseName": "SMT车间线边及MRB隔离仓",
+      "warehouseType": "线边备料架 + 不合格隔离区",
+      "managerId": "KPR-002",
+      "managerName": "李敏",
+      "address": "A栋2楼 SMT-Line-01/02 产线旁",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-01T08:00:00.000Z"
+    }
+  ],
+  "keepers": [
+    {
+      "keeperId": "KPR-001",
+      "employeeNo": "EMP-101",
+      "name": "张伟",
+      "role": "仓库主管",
+      "warehouseCode": "WH-SMT-01",
+      "phone": "138-0013-8001",
+      "shift": "常白班",
+      "status": "ACTIVE"
+    },
+    {
+      "keeperId": "KPR-002",
+      "employeeNo": "EMP-102",
+      "name": "李敏",
+      "role": "波次发料员",
+      "warehouseCode": "WH-LINE-01",
+      "phone": "138-0013-8002",
+      "shift": "白班",
+      "status": "ACTIVE"
+    },
+    {
+      "keeperId": "KPR-003",
+      "employeeNo": "EMP-103",
+      "name": "陈静",
+      "role": "IQC/MSD专员",
+      "warehouseCode": "WH-MSD-01",
+      "phone": "138-0013-8003",
+      "shift": "白班",
+      "status": "ACTIVE"
+    },
+    {
+      "keeperId": "KPR-004",
+      "employeeNo": "EMP-104",
+      "name": "王磊",
+      "role": "收料仓管员",
+      "warehouseCode": "WH-COLD-01",
+      "phone": "138-0013-8004",
+      "shift": "白班",
+      "status": "ACTIVE"
+    },
+    {
+      "keeperId": "KPR-005",
+      "employeeNo": "EMP-105",
+      "name": "赵强",
+      "role": "产线物料员",
+      "warehouseCode": "WH-LINE-01",
+      "phone": "138-0013-8005",
+      "shift": "夜班",
+      "status": "ACTIVE"
+    }
+  ],
+  "suppliers": [
+    {
+      "supplierCode": "SUP-ARROW",
+      "supplierName": "艾睿电子(Arrow)",
+      "contactName": "林志远",
+      "phone": "0755-8820-1101",
+      "categoryTags": "IC芯片 / MCU / 电源管理",
+      "qualityGrade": "A级免检",
+      "leadTimeDays": 7,
+      "notes": "ST/TI授权一级代理，支持IPC-1782原厂复合码"
+    },
+    {
+      "supplierCode": "SUP-WT",
+      "supplierName": "文晔科技",
+      "contactName": "周晓雯",
+      "phone": "0755-8820-2209",
+      "categoryTags": "IC芯片 / 模拟电源",
+      "qualityGrade": "A级免检",
+      "leadTimeDays": 10,
+      "notes": "TI 工业类芯片核心代理商"
+    },
+    {
+      "supplierCode": "SUP-YAGEO",
+      "supplierName": "国巨原厂直供",
+      "contactName": "陈志强",
+      "phone": "0512-6258-9012",
+      "categoryTags": "阻容感 / 贴片电阻",
+      "qualityGrade": "A级免检",
+      "leadTimeDays": 5,
+      "notes": "0402/0603阻容VMI常备直供"
+    },
+    {
+      "supplierCode": "SUP-MURATA",
+      "supplierName": "村田代理华强芯城",
+      "contactName": "黄家辉",
+      "phone": "0755-8321-4450",
+      "categoryTags": "阻容感 / MLCC电容",
+      "qualityGrade": "B级抽检",
+      "leadTimeDays": 7,
+      "notes": "高容X7R车规及工业级电容"
+    },
+    {
+      "supplierCode": "SUP-JST",
+      "supplierName": "JST华南总代",
+      "contactName": "吴丽敏",
+      "phone": "0769-2288-3100",
+      "categoryTags": "连接器",
+      "qualityGrade": "B级抽检",
+      "leadTimeDays": 12,
+      "notes": "立贴/卧贴精密连接器"
+    },
+    {
+      "supplierCode": "SUP-SCC",
+      "supplierName": "深南电路",
+      "contactName": "刘建华",
+      "phone": "0755-8609-6000",
+      "categoryTags": "PCB光板",
+      "qualityGrade": "B级抽检",
+      "leadTimeDays": 14,
+      "notes": "多层沉金FR4硬板，真空防潮打包交货"
+    },
+    {
+      "supplierCode": "SUP-SENJU",
+      "supplierName": "千住金属深圳",
+      "contactName": "高桥明",
+      "phone": "0755-2731-8899",
+      "categoryTags": "辅料锡膏",
+      "qualityGrade": "A级免检",
+      "leadTimeDays": 3,
+      "notes": "全程2-10℃冷链专车配送，需回温记录"
+    }
+  ],
+  "customers": [
+    {
+      "customerCode": "CUS-INOV",
+      "customerName": "汇川工业自动化",
+      "contactName": "孙工 (SQE)",
+      "phone": "0755-8318-5501",
+      "industry": "工业控制 / PLC网关",
+      "traceRequirement": "需IPC-1782全程UID+DateCode正向反查追溯",
+      "deliveryAddress": "深圳市龙华区观澜高新园汇川基地B3栋"
+    },
+    {
+      "customerCode": "CUS-HWDE",
+      "customerName": "华为数字能源配套",
+      "contactName": "杨主管 (PMC)",
+      "phone": "0769-2289-7702",
+      "industry": "工业电源 / 储能BMS",
+      "traceRequirement": "严控MSD Level 2/3暴露时间，强制批号锁定追溯",
+      "deliveryAddress": "东莞市松山湖工业南路能源研发中心"
+    },
+    {
+      "customerCode": "CUS-DJI",
+      "customerName": "大疆行业应用制造",
+      "contactName": "郑工程师",
+      "phone": "0755-2665-6677",
+      "industry": "智能航电 / 无线采集模块",
+      "traceRequirement": "客供料与自购料分仓独立UID追溯",
+      "deliveryAddress": "深圳市南山区西丽百旺信智造园"
+    }
+  ],
+  "boms": [
+    {
+      "bomId": "BOM-CTRL-V3",
+      "productCode": "PCBA-CTRL-V3",
+      "productName": "工业网关主控板 V3.0",
+      "version": "V3.0",
+      "customerCode": "CUS-INOV",
+      "customerName": "汇川工业自动化",
+      "processType": "双面SMT + 回流焊 + AOI",
+      "status": "ACTIVE",
+      "updatedAt": "2026-11-10T09:00:00.000Z",
+      "items": [
+        {
+          "skuCode": "MAT-PCB-001",
+          "qtyPerBoard": 1,
+          "attritionRate": 0.01,
+          "designators": "PCB1"
+        },
+        {
+          "skuCode": "MAT-IC-001",
+          "qtyPerBoard": 1,
+          "attritionRate": 0.01,
+          "designators": "U1"
+        },
+        {
+          "skuCode": "MAT-IC-002",
+          "qtyPerBoard": 2,
+          "attritionRate": 0.02,
+          "designators": "U2,U3"
+        },
+        {
+          "skuCode": "MAT-RES-001",
+          "qtyPerBoard": 12,
+          "attritionRate": 0.05,
+          "designators": "R1-R12"
+        },
+        {
+          "skuCode": "MAT-CAP-001",
+          "qtyPerBoard": 20,
+          "attritionRate": 0.05,
+          "designators": "C1-C20"
+        },
+        {
+          "skuCode": "MAT-CON-001",
+          "qtyPerBoard": 2,
+          "attritionRate": 0.02,
+          "designators": "J1,J2"
+        }
+      ]
+    },
+    {
+      "bomId": "BOM-PWR-24V",
+      "productCode": "PCBA-PWR-24V",
+      "productName": "24V工业隔离电源模块",
+      "version": "V1.2",
+      "customerCode": "CUS-HWDE",
+      "customerName": "华为数字能源配套",
+      "processType": "单面SMT + 选择性波峰焊",
+      "status": "ACTIVE",
+      "updatedAt": "2026-11-12T14:00:00.000Z",
+      "items": [
+        {
+          "skuCode": "MAT-IC-002",
+          "qtyPerBoard": 2,
+          "attritionRate": 0.02,
+          "designators": "U1,U2"
+        },
+        {
+          "skuCode": "MAT-RES-001",
+          "qtyPerBoard": 8,
+          "attritionRate": 0.05,
+          "designators": "R1-R8"
+        },
+        {
+          "skuCode": "MAT-CAP-001",
+          "qtyPerBoard": 10,
+          "attritionRate": 0.05,
+          "designators": "C1-C10"
+        },
+        {
+          "skuCode": "MAT-CON-001",
+          "qtyPerBoard": 1,
+          "attritionRate": 0.02,
+          "designators": "J1"
+        }
+      ]
+    }
+  ],
+  "asns": [
+    {
+      "asnNo": "ASN-20261117-01",
+      "poNo": "PO-20261115-08",
+      "supplierCode": "SUP-ARROW",
+      "supplierName": "艾睿电子(Arrow)",
+      "warehouseCode": "WH-MSD-01",
+      "expectedDate": "2026-11-17",
+      "purchaser": "林采购",
+      "source": "MANUAL",
+      "status": "PENDING",
+      "notes": "急补主控MCU与JST立贴连接器，到货优先安排IQC快检入库",
+      "createdAt": "2026-11-17T08:00:00.000Z",
+      "lines": [
+        {
+          "lineId": "ASNL-01",
+          "skuCode": "MAT-IC-001",
+          "mpn": "STM32F407VET6",
+          "expectedQty": 1000,
+          "receivedQty": 0,
+          "lotNumber": "ST2646A1",
+          "dateCode": "2646",
+          "targetBin": "MSD-01-01"
+        },
+        {
+          "lineId": "ASNL-02",
+          "skuCode": "MAT-CON-001",
+          "mpn": "BM04B-GHS-TBT",
+          "expectedQty": 500,
+          "receivedQty": 0,
+          "lotNumber": "JS2645K2",
+          "dateCode": "2645",
+          "targetBin": "B-02-01"
+        }
+      ]
+    },
+    {
+      "asnNo": "ASN-20261117-02",
+      "poNo": "PO-20261114-03",
+      "supplierCode": "SUP-SCC",
+      "supplierName": "深南电路",
+      "warehouseCode": "WH-COLD-01",
+      "expectedDate": "2026-11-17",
+      "purchaser": "王采购",
+      "source": "UPLOAD_CSV",
+      "status": "PARTIAL",
+      "notes": "分两批交货：第一批500张已入库，尾数300张今日下午送达",
+      "createdAt": "2026-11-16T15:30:00.000Z",
+      "lines": [
+        {
+          "lineId": "ASNL-03",
+          "skuCode": "MAT-PCB-001",
+          "mpn": "PCB-CTRL-V3-4L",
+          "expectedQty": 800,
+          "receivedQty": 500,
+          "lotNumber": "SCC2646P2",
+          "dateCode": "2646",
+          "targetBin": "P-01-01"
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "skuCode": "MAT-IC-001",
+      "mpn": "STM32F407VET6",
+      "name": "ARM Cortex-M4 32位MCU LQFP-100",
+      "manufacturer": "STMicroelectronics",
+      "category": "IC芯片",
+      "packageType": "LQFP-100 (Tray/Reel)",
+      "unit": "PCS",
+      "msdLevel": "Level 3",
+      "safetyStock": 500,
+      "defaultBin": "MSD-01-01"
+    },
+    {
+      "skuCode": "MAT-IC-002",
+      "mpn": "TPS54331DR",
+      "name": "3A 28V 降压DC-DC电源芯片 SOIC-8",
+      "manufacturer": "Texas Instruments",
+      "category": "IC芯片",
+      "packageType": "SOIC-8 (2500/Reel)",
+      "unit": "PCS",
+      "msdLevel": "Level 2",
+      "safetyStock": 1000,
+      "defaultBin": "MSD-01-02"
+    },
+    {
+      "skuCode": "MAT-RES-001",
+      "mpn": "RC0402FR-0710KL",
+      "name": "贴片电阻 10kΩ ±1% 1/16W 0402",
+      "manufacturer": "YAGEO",
+      "category": "阻容感",
+      "packageType": "0402 (10000/Reel)",
+      "unit": "PCS",
+      "msdLevel": "Level 1",
+      "safetyStock": 10000,
+      "defaultBin": "A-01-01"
+    },
+    {
+      "skuCode": "MAT-CAP-001",
+      "mpn": "GRM155R71C104KA88D",
+      "name": "贴片陶瓷电容 100nF 16V X7R 0402",
+      "manufacturer": "Murata",
+      "category": "阻容感",
+      "packageType": "0402 (10000/Reel)",
+      "unit": "PCS",
+      "msdLevel": "Level 1",
+      "safetyStock": 10000,
+      "defaultBin": "A-01-02"
+    },
+    {
+      "skuCode": "MAT-CON-001",
+      "mpn": "BM04B-GHS-TBT",
+      "name": "JST 1.25mm间距 4Pin立贴连接器",
+      "manufacturer": "JST",
+      "category": "连接器",
+      "packageType": "SMD-4P (1000/Reel)",
+      "unit": "PCS",
+      "msdLevel": "Level 1",
+      "safetyStock": 1200,
+      "defaultBin": "B-02-01"
+    },
+    {
+      "skuCode": "MAT-PCB-001",
+      "mpn": "PCB-CTRL-V3-4L",
+      "name": "工业网关主控板 4层沉金 FR4光板",
+      "manufacturer": "深南电路",
+      "category": "PCB光板",
+      "packageType": "4层板 拼板2x1",
+      "unit": "张",
+      "msdLevel": "Level 2a",
+      "safetyStock": 600,
+      "defaultBin": "P-01-01"
+    },
+    {
+      "skuCode": "MAT-PAS-001",
+      "mpn": "M705-GRN360-K2-V",
+      "name": "千住无铅免洗锡膏 SAC305 500g",
+      "manufacturer": "Senju Metal",
+      "category": "辅料锡膏",
+      "packageType": "500g/瓶",
+      "unit": "瓶",
+      "msdLevel": "Level 1",
+      "safetyStock": 10,
+      "defaultBin": "COLD-01-01"
+    }
+  ],
+  "bins": [
+    {
+      "binCode": "A-01-01",
+      "warehouseCode": "WH-SMT-01",
+      "zone": "电子料主库区",
+      "capacityReels": 40,
+      "keeperName": "张伟",
+      "description": "0402/0603阻容卷盘标准货位 A1排"
+    },
+    {
+      "binCode": "A-01-02",
+      "warehouseCode": "WH-SMT-01",
+      "zone": "电子料主库区",
+      "capacityReels": 40,
+      "keeperName": "张伟",
+      "description": "0402/0603容感卷盘标准货位 A2排"
+    },
+    {
+      "binCode": "B-02-01",
+      "warehouseCode": "WH-SMT-01",
+      "zone": "电子料主库区",
+      "capacityReels": 24,
+      "keeperName": "张伟",
+      "description": "接插件及电感大卷盘区 B2排"
+    },
+    {
+      "binCode": "MSD-01-01",
+      "warehouseCode": "WH-MSD-01",
+      "zone": "防潮恒温柜(MSD)",
+      "capacityReels": 30,
+      "keeperName": "陈静",
+      "description": "RH<5% 超低湿防潮柜 主控IC区"
+    },
+    {
+      "binCode": "MSD-01-02",
+      "warehouseCode": "WH-MSD-01",
+      "zone": "防潮恒温柜(MSD)",
+      "capacityReels": 30,
+      "keeperName": "陈静",
+      "description": "RH<5% 超低湿防潮柜 电源/模拟IC区"
+    },
+    {
+      "binCode": "P-01-01",
+      "warehouseCode": "WH-COLD-01",
+      "zone": "PCB板库区",
+      "capacityReels": 20,
+      "keeperName": "王磊",
+      "description": "真空防氧化PCB光板架"
+    },
+    {
+      "binCode": "COLD-01-01",
+      "warehouseCode": "WH-COLD-01",
+      "zone": "锡膏冷藏库",
+      "capacityReels": 16,
+      "keeperName": "王磊",
+      "description": "2-10℃ 恒温锡膏冷藏柜"
+    },
+    {
+      "binCode": "LINE-SMT-01",
+      "warehouseCode": "WH-LINE-01",
+      "zone": "产线暂存区",
+      "capacityReels": 50,
+      "keeperName": "李敏",
+      "description": "SMT一线线边上料架"
+    },
+    {
+      "binCode": "MRB-01-01",
+      "warehouseCode": "WH-LINE-01",
+      "zone": "待检/隔离区",
+      "capacityReels": 20,
+      "keeperName": "陈静",
+      "description": "IQC待检及MRB报废隔离位"
+    }
+  ],
+  "reels": [
+    {
+      "reelId": "RL261015-001",
+      "skuCode": "MAT-IC-001",
+      "mpn": "STM32F407VET6",
+      "lotNumber": "ST2638A1",
+      "dateCode": "2638",
+      "supplier": "艾睿电子(Arrow)",
+      "receiptDocNo": "RCV-20261015-01",
+      "initialQty": 1000,
+      "qty": 1000,
+      "issuedQty": 0,
+      "binCode": "MSD-01-01",
+      "msdLevel": "Level 3",
+      "msdState": "SEALED",
+      "status": "IN_STOCK",
+      "receivedAt": "2026-10-15T09:20:00.000Z",
+      "updatedAt": "2026-10-15T09:20:00.000Z"
+    },
+    {
+      "reelId": "RL261102-002",
+      "skuCode": "MAT-IC-001",
+      "mpn": "STM32F407VET6",
+      "lotNumber": "ST2642B9",
+      "dateCode": "2642",
+      "supplier": "艾睿电子(Arrow)",
+      "receiptDocNo": "RCV-20261102-03",
+      "initialQty": 1000,
+      "qty": 1000,
+      "issuedQty": 0,
+      "binCode": "MSD-01-01",
+      "msdLevel": "Level 3",
+      "msdState": "SEALED",
+      "status": "IN_STOCK",
+      "receivedAt": "2026-11-02T14:10:00.000Z",
+      "updatedAt": "2026-11-02T14:10:00.000Z"
+    },
+    {
+      "reelId": "RL261020-003",
+      "skuCode": "MAT-IC-002",
+      "mpn": "TPS54331DR",
+      "lotNumber": "TI2639M4",
+      "dateCode": "2639",
+      "supplier": "文晔科技",
+      "receiptDocNo": "RCV-20261020-02",
+      "initialQty": 2500,
+      "qty": 2500,
+      "issuedQty": 0,
+      "binCode": "MSD-01-02",
+      "msdLevel": "Level 2",
+      "msdState": "SEALED",
+      "status": "IN_STOCK",
+      "receivedAt": "2026-10-20T10:05:00.000Z",
+      "updatedAt": "2026-10-20T10:05:00.000Z"
+    },
+    {
+      "reelId": "RL261012-004",
+      "skuCode": "MAT-RES-001",
+      "mpn": "RC0402FR-0710KL",
+      "lotNumber": "YG2636R1",
+      "dateCode": "2636",
+      "supplier": "国巨原厂直供",
+      "receiptDocNo": "RCV-20261012-01",
+      "initialQty": 10000,
+      "qty": 10000,
+      "issuedQty": 0,
+      "binCode": "A-01-01",
+      "msdLevel": "Level 1",
+      "msdState": "SEALED",
+      "status": "IN_STOCK",
+      "receivedAt": "2026-10-12T08:40:00.000Z",
+      "updatedAt": "2026-10-12T08:40:00.000Z"
+    },
+    {
+      "reelId": "RL261105-005",
+      "skuCode": "MAT-RES-001",
+      "mpn": "RC0402FR-0710KL",
+      "lotNumber": "YG2643R8",
+      "dateCode": "2643",
+      "supplier": "国巨原厂直供",
+      "receiptDocNo": "RCV-20261105-01",
+      "initialQty": 10000,
+      "qty": 10000,
+      "issuedQty": 0,
+      "binCode": "A-01-01",
+      "msdLevel": "Level 1",
+      "msdState": "SEALED",
+      "status": "IN_STOCK",
+      "receivedAt": "2026-11-05T11:30:00.000Z",
+      "updatedAt": "2026-11-05T11:30:00.000Z"
+    },
+    {
+      "reelId": "RL261018-006",
+      "skuCode": "MAT-CAP-001",
+      "mpn": "GRM155R71C104KA88D",
+      "lotNumber": "MU2637C2",
+      "dateCode": "2637",
+      "supplier": "村田代理华强芯城",
+      "receiptDocNo": "RCV-20261018-04",
+      "initialQty": 10000,
+      "qty": 10000,
+      "issuedQty": 0,
+      "binCode": "A-01-02",
+      "msdLevel": "Level 1",
+      "msdState": "SEALED",
+      "status": "IN_STOCK",
+      "receivedAt": "2026-10-18T15:00:00.000Z",
+      "updatedAt": "2026-10-18T15:00:00.000Z"
+    },
+    {
+      "reelId": "RL261101-007",
+      "skuCode": "MAT-CON-001",
+      "mpn": "BM04B-GHS-TBT",
+      "lotNumber": "JS2640N1",
+      "dateCode": "2640",
+      "supplier": "JST华南总代",
+      "receiptDocNo": "RCV-20261101-01",
+      "initialQty": 1000,
+      "qty": 1000,
+      "issuedQty": 0,
+      "binCode": "B-02-01",
+      "msdLevel": "Level 1",
+      "msdState": "SEALED",
+      "status": "IN_STOCK",
+      "receivedAt": "2026-11-01T13:15:00.000Z",
+      "updatedAt": "2026-11-01T13:15:00.000Z"
+    },
+    {
+      "reelId": "RL261108-008",
+      "skuCode": "MAT-PCB-001",
+      "mpn": "PCB-CTRL-V3-4L",
+      "lotNumber": "SCC2644P1",
+      "dateCode": "2644",
+      "supplier": "深南电路",
+      "receiptDocNo": "RCV-20261108-02",
+      "initialQty": 500,
+      "qty": 500,
+      "issuedQty": 0,
+      "binCode": "P-01-01",
+      "msdLevel": "Level 2a",
+      "msdState": "SEALED",
+      "status": "IN_STOCK",
+      "receivedAt": "2026-11-08T16:45:00.000Z",
+      "updatedAt": "2026-11-08T16:45:00.000Z"
+    },
+    {
+      "reelId": "RL261110-009",
+      "skuCode": "MAT-PAS-001",
+      "mpn": "M705-GRN360-K2-V",
+      "lotNumber": "SJ2645S1",
+      "dateCode": "2645",
+      "supplier": "千住金属深圳",
+      "receiptDocNo": "RCV-20261110-01",
+      "initialQty": 12,
+      "qty": 4,
+      "issuedQty": 8,
+      "binCode": "COLD-01-01",
+      "msdLevel": "Level 1",
+      "msdState": "SEALED",
+      "status": "IN_STOCK",
+      "receivedAt": "2026-11-10T09:00:00.000Z",
+      "updatedAt": "2026-11-10T09:00:00.000Z"
+    },
+    {
+      "reelId": "RL261010-010",
+      "skuCode": "MAT-CAP-001",
+      "mpn": "GRM155R71C104KA88D",
+      "lotNumber": "MU2635C9",
+      "dateCode": "2635",
+      "supplier": "村田代理华强芯城",
+      "receiptDocNo": "RCV-20261010-01",
+      "initialQty": 10000,
+      "qty": 2800,
+      "issuedQty": 7200,
+      "binCode": "LINE-SMT-01",
+      "msdLevel": "Level 1",
+      "msdState": "SEALED",
+      "status": "ISSUED_TO_LINE",
+      "workOrderId": "WO-20261115-01",
+      "receivedAt": "2026-10-10T09:30:00.000Z",
+      "updatedAt": "2026-11-15T10:20:00.000Z"
+    },
+    {
+      "reelId": "RL261005-011",
+      "skuCode": "MAT-IC-001",
+      "mpn": "STM32F407VET6",
+      "lotNumber": "ST2634L2",
+      "dateCode": "2634",
+      "supplier": "艾睿电子(Arrow)",
+      "receiptDocNo": "RCV-20261005-02",
+      "initialQty": 400,
+      "qty": 180,
+      "issuedQty": 220,
+      "binCode": "MSD-01-01",
+      "msdLevel": "Level 3",
+      "msdState": "BAKING_REQUIRED",
+      "msdOpenAt": "2026-11-01T08:00:00.000Z",
+      "status": "IN_STOCK",
+      "receivedAt": "2026-10-05T11:00:00.000Z",
+      "updatedAt": "2026-11-10T17:00:00.000Z"
+    },
+    {
+      "reelId": "RL261111-012",
+      "skuCode": "MAT-IC-001",
+      "mpn": "STM32F407VET6",
+      "lotNumber": "ST2644E5",
+      "dateCode": "2644",
+      "supplier": "艾睿电子(Arrow)",
+      "receiptDocNo": "RCV-20261111-01",
+      "initialQty": 200,
+      "qty": 45,
+      "issuedQty": 155,
+      "binCode": "LINE-SMT-01",
+      "msdLevel": "Level 3",
+      "msdState": "EXPOSED",
+      "msdOpenAt": "2026-11-11T13:50:59.194Z",
+      "status": "ISSUED_TO_LINE",
+      "workOrderId": "WO-20261115-01",
+      "receivedAt": "2026-11-06T09:00:00.000Z",
+      "updatedAt": "2026-11-11T13:50:59.194Z"
+    }
+  ],
+  "workOrders": [
+    {
+      "workOrderId": "WO-20261115-01",
+      "productCode": "PCBA-CTRL-V3",
+      "productName": "工业网关主控板 V3.0",
+      "bomId": "BOM-CTRL-V3",
+      "customerCode": "CUS-INOV",
+      "customerName": "汇川工业自动化",
+      "lineName": "SMT-Line-01",
+      "targetQty": 300,
+      "status": "IN_PRODUCTION",
+      "bom": [
+        {
+          "skuCode": "MAT-PCB-001",
+          "qtyPerBoard": 1,
+          "attritionRate": 0.01,
+          "designators": "PCB1"
+        },
+        {
+          "skuCode": "MAT-IC-001",
+          "qtyPerBoard": 1,
+          "attritionRate": 0.01,
+          "designators": "U1"
+        },
+        {
+          "skuCode": "MAT-IC-002",
+          "qtyPerBoard": 2,
+          "attritionRate": 0.02,
+          "designators": "U2,U3"
+        },
+        {
+          "skuCode": "MAT-RES-001",
+          "qtyPerBoard": 12,
+          "attritionRate": 0.05,
+          "designators": "R1-R12"
+        },
+        {
+          "skuCode": "MAT-CAP-001",
+          "qtyPerBoard": 20,
+          "attritionRate": 0.05,
+          "designators": "C1-C20"
+        },
+        {
+          "skuCode": "MAT-CON-001",
+          "qtyPerBoard": 2,
+          "attritionRate": 0.02,
+          "designators": "J1,J2"
+        }
+      ],
+      "issuedBySku": {
+        "MAT-CAP-001": 7200
+      },
+      "replenishedBySku": {},
+      "returnedBySku": {},
+      "createdAt": "2026-11-15T08:00:00.000Z"
+    },
+    {
+      "workOrderId": "WO-20261117-01",
+      "productCode": "PCBA-CTRL-V3",
+      "productName": "工业网关主控板 V3.0",
+      "bomId": "BOM-CTRL-V3",
+      "customerCode": "CUS-INOV",
+      "customerName": "汇川工业自动化",
+      "lineName": "SMT-Line-01",
+      "targetQty": 200,
+      "status": "PLANNED",
+      "bom": [
+        {
+          "skuCode": "MAT-PCB-001",
+          "qtyPerBoard": 1,
+          "attritionRate": 0.01,
+          "designators": "PCB1"
+        },
+        {
+          "skuCode": "MAT-IC-001",
+          "qtyPerBoard": 1,
+          "attritionRate": 0.01,
+          "designators": "U1"
+        },
+        {
+          "skuCode": "MAT-IC-002",
+          "qtyPerBoard": 2,
+          "attritionRate": 0.02,
+          "designators": "U2,U3"
+        },
+        {
+          "skuCode": "MAT-RES-001",
+          "qtyPerBoard": 12,
+          "attritionRate": 0.05,
+          "designators": "R1-R12"
+        },
+        {
+          "skuCode": "MAT-CAP-001",
+          "qtyPerBoard": 20,
+          "attritionRate": 0.05,
+          "designators": "C1-C20"
+        },
+        {
+          "skuCode": "MAT-CON-001",
+          "qtyPerBoard": 2,
+          "attritionRate": 0.02,
+          "designators": "J1,J2"
+        }
+      ],
+      "issuedBySku": {},
+      "replenishedBySku": {},
+      "returnedBySku": {},
+      "createdAt": "2026-11-17T08:30:00.000Z"
+    },
+    {
+      "workOrderId": "WO-20261117-02",
+      "productCode": "PCBA-PWR-24V",
+      "productName": "24V工业隔离电源模块",
+      "bomId": "BOM-PWR-24V",
+      "customerCode": "CUS-HWDE",
+      "customerName": "华为数字能源配套",
+      "lineName": "SMT-Line-02",
+      "targetQty": 150,
+      "status": "PLANNED",
+      "bom": [
+        {
+          "skuCode": "MAT-IC-002",
+          "qtyPerBoard": 2,
+          "attritionRate": 0.02,
+          "designators": "U1,U2"
+        },
+        {
+          "skuCode": "MAT-RES-001",
+          "qtyPerBoard": 8,
+          "attritionRate": 0.05,
+          "designators": "R1-R8"
+        },
+        {
+          "skuCode": "MAT-CAP-001",
+          "qtyPerBoard": 10,
+          "attritionRate": 0.05,
+          "designators": "C1-C10"
+        },
+        {
+          "skuCode": "MAT-CON-001",
+          "qtyPerBoard": 1,
+          "attritionRate": 0.02,
+          "designators": "J1"
+        }
+      ],
+      "issuedBySku": {},
+      "replenishedBySku": {},
+      "returnedBySku": {},
+      "createdAt": "2026-11-17T09:00:00.000Z"
+    }
+  ],
+  "waves": [],
+  "cycleCounts": [
+    {
+      "countId": "CC-20261117-01",
+      "title": "MSD防潮柜与A区阻容日常抽盘",
+      "zoneFilter": "全部库区",
+      "status": "IN_PROGRESS",
+      "createdAt": "2026-11-17T08:15:00.000Z",
+      "lines": [
+        {
+          "reelId": "RL261015-001",
+          "skuCode": "MAT-IC-001",
+          "mpn": "STM32F407VET6",
+          "binCode": "MSD-01-01",
+          "bookQty": 1000,
+          "countedQty": null,
+          "variance": 0,
+          "adjusted": false
+        },
+        {
+          "reelId": "RL261012-004",
+          "skuCode": "MAT-RES-001",
+          "mpn": "RC0402FR-0710KL",
+          "binCode": "A-01-01",
+          "bookQty": 10000,
+          "countedQty": null,
+          "variance": 0,
+          "adjusted": false
+        },
+        {
+          "reelId": "RL261020-003",
+          "skuCode": "MAT-IC-002",
+          "mpn": "TPS54331DR",
+          "binCode": "MSD-01-02",
+          "bookQty": 2500,
+          "countedQty": null,
+          "variance": 0,
+          "adjusted": false
+        }
+      ]
+    }
+  ],
+  "scrapRecords": [],
+  "traceEvents": [
+    {
+      "eventId": "EVT-1001",
+      "timestamp": "2026-10-10T09:30:00.000Z",
+      "action": "INBOUND",
+      "reelId": "RL261010-010",
+      "skuCode": "MAT-CAP-001",
+      "mpn": "GRM155R71C104KA88D",
+      "lotNumber": "MU2635C9",
+      "dateCode": "2635",
+      "qtyDelta": 10000,
+      "balanceAfter": 10000,
+      "toBin": "A-01-02",
+      "docNo": "RCV-20261010-01",
+      "reason": "供应商送货IQC合格入库",
+      "operator": "张伟 (仓管员)"
+    },
+    {
+      "eventId": "EVT-1002",
+      "timestamp": "2026-10-15T09:20:00.000Z",
+      "action": "INBOUND",
+      "reelId": "RL261015-001",
+      "skuCode": "MAT-IC-001",
+      "mpn": "STM32F407VET6",
+      "lotNumber": "ST2638A1",
+      "dateCode": "2638",
+      "qtyDelta": 1000,
+      "balanceAfter": 1000,
+      "toBin": "MSD-01-01",
+      "docNo": "RCV-20261015-01",
+      "reason": "IQC抽检合格上架防潮柜",
+      "operator": "张伟 (仓管员)"
+    },
+    {
+      "eventId": "EVT-1003",
+      "timestamp": "2026-11-15T10:20:00.000Z",
+      "action": "WAVE_ISSUE",
+      "reelId": "RL261010-010",
+      "skuCode": "MAT-CAP-001",
+      "mpn": "GRM155R71C104KA88D",
+      "lotNumber": "MU2635C9",
+      "dateCode": "2635",
+      "qtyDelta": -7200,
+      "balanceAfter": 2800,
+      "fromBin": "A-01-02",
+      "toBin": "LINE-SMT-01",
+      "workOrderId": "WO-20261115-01",
+      "lineOrStation": "SMT-Line-01",
+      "docNo": "ISS-20261115-01",
+      "reason": "工单首套发料出库至线边",
+      "operator": "李敏 (发料员)"
+    },
+    {
+      "eventId": "EVT-1004",
+      "timestamp": "2026-11-10T17:00:00.000Z",
+      "action": "RETURN",
+      "reelId": "RL261005-011",
+      "skuCode": "MAT-IC-001",
+      "mpn": "STM32F407VET6",
+      "lotNumber": "ST2634L2",
+      "dateCode": "2634",
+      "qtyDelta": 180,
+      "balanceAfter": 180,
+      "fromBin": "LINE-SMT-01",
+      "toBin": "MSD-01-01",
+      "workOrderId": "WO-20261115-01",
+      "docNo": "RET-20261110-01",
+      "reason": "Level 3湿敏IC拆封超168h未用完退库，系统锁定需烘烤",
+      "operator": "产线物料员"
+    }
+  ]
+}

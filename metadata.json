@@ -1,0 +1,6 @@
+{
+  "name": "精益电子制造 WMS 仓储管理系统",
+  "description": "面向无ERP环境电子制造企业的独立仓储管理系统，支持入库、出库、报废、盘点、工单波次发料、生产补料、退料及全程扫码追溯。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
