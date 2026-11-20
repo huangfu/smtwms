@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>新建工厂导入 SMT-WMS 智能仓储系统实施蓝图与管理规范</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 16mm 15mm 16mm 15mm;
+    }
+    @page :first {
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Unifont", sans-serif;
+      color: #1e293b;
+      background: #ffffff;
+      font-size: 9.5pt;
+      line-height: 1.58;
+    }
+
+    /* Cover Page */
+    .cover {
+      width: 210mm;
+      height: 297mm;
+      background: linear-gradient(155deg, #0b1f33 0%, #0f2942 52%, #123c63 100%);
+      color: #ffffff;
+      position: relative;
+      overflow: hidden;
+      padding: 24mm 20mm 20mm 20mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      page-break-after: always;
+    }
+    .cover-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(56, 189, 248, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.08) 1px, transparent 1px);
+      background-size: 14mm 14mm;
+      pointer-events: none;
+    }
+    .cover-accent {
+      position: absolute;
+      right: -35mm;
+      top: 40mm;
+      width: 115mm;
+      height: 115mm;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(14, 165, 233, 0.25) 0%, rgba(14, 165, 233, 0) 70%);
+    }
+    .cover-top {
+      position: relative;
+      z-index: 2;
+    }
+    .cover-tag {
+      display: inline-block;
+      border: 1px solid rgba(56, 189, 248, 0.55);
+      background: rgba(2, 132, 199, 0.22);
+      color: #7dd3fc;
+      padding: 4px 12px;
+      font-size: 8.5pt;
+      letter-spacing: 1.5px;
+      font-weight: 600;
+      border-radius: 3px;
+    }
+    .cover-title {
+      margin: 22mm 0 6mm 0;
+      font-size: 27pt;
+      font-weight: 900;
+      line-height: 1.24;
+      letter-spacing: 0.5px;
+    }
+    .cover-subtitle {
+      font-size: 13pt;
+      color: #bae6fd;
+      font-weight: 400;
+      line-height: 1.55;
+      max-width: 155mm;
+      margin: 0;
+    }
+    .cover-divider {
+      width: 42mm;
+      height: 3.5px;
+      background: #38bdf8;
+      margin: 12mm 0;
+    }
+    .cover-pillars {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6mm;
+      margin-top: 8mm;
+      position: relative;
+      z-index: 2;
+    }
+    .cover-pillar {
+      background: rgba(15, 23, 42, 0.42);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-left: 3px solid #38bdf8;
+      padding: 4.5mm 5mm;
+      border-radius: 3px;
+    }
+    .cover-pillar h4 {
+      margin: 0 0 2mm 0;
+      font-size: 10pt;
+      color: #f8fafc;
+      font-weight: 700;
+    }
+    .cover-pillar p {
+      margin: 0;
+      font-size: 8.3pt;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+    .cover-footer {
+      position: relative;
+      z-index: 2;
+      border-top: 1px solid rgba(148, 163, 184, 0.3);
+      padding-top: 6mm;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6mm;
+      font-size: 7.8pt;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+
+    /* Section & Page Layout */
+    .page-break {
+      page-break-before: always;
+    }
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      border-bottom: 2px solid #0f2942;
+      padding-bottom: 5px;
+      margin: 0 0 12px 0;
+    }
+    .section-num {
+      font-size: 15pt;
+      font-weight: 900;
+      color: #0284c7;
+      font-variant-numeric: tabular-nums;
+    }
+    .section-title {
+      font-size: 14.5pt;
+      font-weight: 800;
+      color: #0f2942;
+      margin: 0;
+    }
+    .section-en {
+      margin-left: auto;
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    h3 {
+      font-size: 10.8pt;
+      font-weight: 700;
+      color: #0f2942;
+      margin: 13px 0 6px 0;
+      padding-left: 8px;
+      border-left: 3.5px solid #0284c7;
+    }
+
+    p {
+      margin: 0 0 8px 0;
+    }
+
+    /* Running Header / Footer hint per page block */
+    .page-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 7.5pt;
+      color: #94a3b8;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin-bottom: 10px;
+    }
+
+    /* KPI / Card Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin: 8px 0 12px 0;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 9px;
+      margin: 8px 0 12px 0;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin: 8px 0 12px 0;
+    }
+
+    .card {
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 9px 11px;
+      background: #f8fafc;
+      break-inside: avoid;
+    }
+    .card-accent {
+      border-top: 3px solid #0284c7;
+      background: #ffffff;
+    }
+    .card-warn {
+      border-left: 3.5px solid #d97706;
+      background: #fffbeb;
+      border-color: #fde68a;
+      border-left-color: #d97706;
+    }
+    .card-red {
+      border-left: 3.5px solid #dc2626;
+      background: #fef2f2;
+      border-color: #fecaca;
+      border-left-color: #dc2626;
+    }
+    .card-title {
+      font-size: 9.5pt;
+      font-weight: 700;
+      color: #0f2942;
+      margin-bottom: 4px;
+    }
+    .kpi-value {
+      font-size: 16pt;
+      font-weight: 900;
+      color: #0284c7;
+      line-height: 1.2;
+      margin-bottom: 2px;
+    }
+    .kpi-label {
+      font-size: 8pt;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 7px 0 12px 0;
+      font-size: 8.3pt;
+      break-inside: auto;
+    }
+    thead {
+      display: table-header-group;
+    }
+    tr {
+      break-inside: avoid;
+    }
+    th {
+      background: #0f2942;
+      color: #ffffff;
+      text-align: left;
+      padding: 6px 7px;
+      font-weight: 600;
+      border: 1px solid #0f2942;
+    }
+    td {
+      padding: 5.5px 7px;
+      border: 1px solid #cbd5e1;
+      vertical-align: top;
+      color: #1e293b;
+    }
+    tbody tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 7.8pt;
+      color: #0369a1;
+      background: #e0f2fe;
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+
+    ul, ol {
+      margin: 4px 0 8px 0;
+      padding-left: 18px;
+    }
+    li {
+      margin-bottom: 3.5px;
+    }
+    .callout {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-left: 4px solid #0284c7;
+      padding: 8px 11px;
+      border-radius: 3px;
+      margin: 8px 0 12px 0;
+      font-size: 8.7pt;
+      break-inside: avoid;
+    }
+    .callout strong {
+      color: #0c4a6e;
+    }
+    .svg-box {
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 8px;
+      background: #ffffff;
+      margin: 8px 0 12px 0;
+      break-inside: avoid;
+    }
+    .svg-caption {
+      text-align: center;
+      font-size: 8pt;
+      color: #64748b;
+      margin-top: 5px;
+      font-weight: 500;
+    }
+
+    .toc-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 7px 0;
+      border-bottom: 1px dashed #cbd5e1;
+      font-size: 10pt;
+    }
+    .toc-row strong {
+      color: #0f2942;
+    }
+    .toc-desc {
+      font-size: 8.4pt;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 1px 6px;
+      font-size: 7.5pt;
+      font-weight: 700;
+      border-radius: 2px;
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    .badge-blue { background: #e0f2fe; color: #0369a1; }
+    .badge-amber { background: #fef3c7; color: #92400e; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-green { background: #dcfce7; color: #166534; }
+  </style>
+</head>
+<body>
+
+<!-- ==================== PAGE 1: COVER ==================== -->
+<section class="cover">
+  <div class="cover-grid"></div>
+  <div class="cover-accent"></div>
+
+  <div class="cover-top">
+    <div class="cover-tag">SMT INTELLIGENT WAREHOUSE IMPLEMENTATION BLUEPRINT</div>
+    <h1 class="cover-title">新建电子制造工厂导入<br/>SMT-WMS 智能仓储系统<br/>实施蓝图与管理规范</h1>
+    <p class="cover-subtitle">
+      基于「一盘一码 UID 追溯 + 复合产权隔离 + 单表特料/代用 BOM + IPC/JEDEC MSD 防潮闭环 + Zebra ZPL 打印 + 前后端分离 (.NET 10 / FreeSql 多库)」系统架构编制
+    </p>
+    <div class="cover-divider"></div>
+
+    <div class="cover-pillars">
+      <div class="cover-pillar">
+        <h4>01 / 前置准入条件与环境标准</h4>
+        <p>组织职责、EPA 防静电与 MSD 防潮物理仓区、工业网络与 MSSQL / PostgreSQL 数据库底座标准。</p>
+      </div>
+      <div class="cover-pillar">
+        <h4>02 / 7 大主数据准备与编码规范</h4>
+        <p>覆盖仓库/库位、包装 SPQ、供应商条码规则、ZPL 标签模板、SKU+产权复合清单与单表代用 BOM。</p>
+      </div>
+      <div class="cover-pillar">
+        <h4>03 / 硬件选型与工位配置清单</h4>
+        <p>300DPI Zebra 热转印打印机、高密二维扫码枪、X-Ray/光学点数机、氮气柜与烤箱精准选型标准。</p>
+      </div>
+      <div class="cover-pillar">
+        <h4>04 / 车间管理模式与 8 周上线路线</h4>
+        <p>6 大防呆闭环 SOP（ASN / 产权防混 / FIFO / MSD / 退料拆子盘 / 盘点追溯）、RACI 与 KPI 验收。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <span>文档编号：SMT-WMS-IMP-2026-V1.0</span>
+    <span>适用对象：新建 PCBA / SMT 工厂管理层、PMC、仓库、IQC、ME 及 IT 实施团队</span>
+    <span>编制日期：2026 年 11 月</span>
+  </div>
+</section>
+
+<!-- ==================== PAGE 2: EXECUTIVE SUMMARY & TOC ==================== -->
+<section>
+  <div class="page-meta">
+    <span>新建工厂导入 SMT-WMS 智能仓储系统实施蓝图</span>
+    <span>目录与系统导入总览</span>
+  </div>
+
+  <div class="section-header">
+    <span class="section-num">00</span>
+    <h2 class="section-title">目录导览与新厂导入核心目标</h2>
+    <span class="section-en">EXECUTIVE SUMMARY &amp; CONTENTS</span>
+  </div>
+
+  <p>
+    对于新建 SMT / PCBA 电子制造工厂而言，仓储管理的核心难点不在于「大件堆存」，而在于<strong>数千种微小贴片料盘（Reel）的高频周转、多客户客供/自购产权隔离、IPC/JEDEC 湿敏元件（MSD）车间暴露寿命控制、强制先进先出（FIFO）防呆，以及汽车电子/工控行业要求的单盘级正反向追溯</strong>。本蓝图紧扣当前 SMT-WMS 系统架构，为新建工厂从「零」到「全面上线」提供可直接落地的准入清单、数据规范、硬件配置与车间管理模式。
+  </p>
+
+  <div class="grid-4">
+    <div class="card card-accent">
+      <div class="kpi-value">≥ 99.8%</div>
+      <div class="kpi-label">目标库存账实准确率</div>
+    </div>
+    <div class="card card-accent">
+      <div class="kpi-value">0%</div>
+      <div class="kpi-label">FIFO 违规 &amp; MSD 超时上线</div>
+    </div>
+    <div class="card card-accent">
+      <div class="kpi-value">≤ 15 秒</div>
+      <div class="kpi-label">单盘扫码解析与 ZPL 赋码</div>
+    </div>
+    <div class="card card-accent">
+      <div class="kpi-value">≤ 10 秒</div>
+      <div class="kpi-label">批次 / UID / 工单全链路追溯</div>
+    </div>
+  </div>
+
+  <h3>全书章节结构</h3>
+  <div style="margin: 6px 0 14px 0;">
+    <div class="toc-row">
+      <div><strong>第一章：新建工厂导入前置条件（4 大准入维度）</strong><div class="toc-desc">组织角色分工、物理仓区规划与防静电/防潮标准、网络及 IT 部署架构、管理红线制度</div></div>
+      <span class="badge badge-blue">第 3 页</span>
+    </div>
+    <div class="toc-row">
+      <div><strong>第二章：主数据准备清单与 4 批次初始化规范</strong><div class="toc-desc">仓库/仓管员/库位、包装 SPQ、供应商条码规则、ZPL 模板、SKU+产权复合清单、单表特料/代用 BOM、期初盘点</div></div>
+      <span class="badge badge-blue">第 4–5 页</span>
+    </div>
+    <div class="toc-row">
+      <div><strong>第三章：硬件设备选型与工位配置清单</strong><div class="toc-desc">Zebra ZPL 打印机（LAN TCP 9100 / USB Browser Print）、高密二维码枪、点数机、防潮氮气柜/烤箱与服务器配置</div></div>
+      <span class="badge badge-blue">第 6 页</span>
+    </div>
+    <div class="toc-row">
+      <div><strong>第四章：SMT 车间管理模式与 6 大作业闭环设计</strong><div class="toc-desc">ASN 预约收料赋码、客供/专料防混发、波次齐套与 FIFO 硬拦截、MSD 烘烤闭环、补退料拆子盘、循环盘点与全追溯</div></div>
+      <span class="badge badge-blue">第 7–8 页</span>
+    </div>
+    <div class="toc-row">
+      <div><strong>第五章：岗位 RACI 矩阵、8 周落地路线图、KPI 与避坑指南</strong><div class="toc-desc">跨部门职责边界、W1–W8 里程碑实施甘特表、量化验收标准及新厂最易踩的 5 个核心管理陷阱</div></div>
+      <span class="badge badge-blue">第 9–10 页</span>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>系统核心架构优势（支持「独立无 ERP 启动」与「企业级 MSSQL 演进」）：</strong>
+    新建工厂初期往往尚未上线 ERP 或 MES。本 SMT-WMS 内置完整的物料清单、BOM、工单与 ASN 管理能力，支持<strong>独立无 ERP 快速上线</strong>；同时采用前后端分离设计（React Web + <span class="mono">.NET 10 + FreeSql + DDD</span>），通过配置即可在本地 SQLite、企业内网 <strong>Microsoft SQL Server (MSSQL)</strong>、PostgreSQL、MySQL 之间无缝切换，并预留多数据源接口（如后续直连工厂 ERP MSSQL 同步 PO/BOM）。
+  </div>
+</section>
+
+<!-- ==================== PAGE 3: PREREQUISITES ==================== -->
+<section class="page-break">
+  <div class="page-meta">
+    <span>第一章：新建工厂导入前置条件</span>
+    <span>组织 · 空间 · IT 架构 · 制度红线</span>
+  </div>
+
+  <div class="section-header">
+    <span class="section-num">01</span>
+    <h2 class="section-title">新建工厂导入前置条件（4 大准入维度）</h2>
+    <span class="section-en">FACTORY READINESS PREREQUISITES</span>
+  </div>
+
+  <p>WMS 是「三分软件、七分管理与数据」。新建工厂在系统正式启动部署前，必须先完成以下四个维度的基础设施与管理准入评审，避免系统沦为事后补录台账的工具。</p>
+
+  <div class="grid-2">
+    <div class="card card-accent">
+      <div class="card-title">1. 组织与岗位权责就绪（人）</div>
+      <ul>
+        <li>设立专职项目负责人（通常为仓储经理或供应链总监），具备跨 PMC/生产/品质协调拍板权。</li>
+        <li>配齐核心操作岗位并分配独立系统账号（禁止多人共用公用账号）：仓库主管、IQC/MSD 专员、收发料仓管员、PMC 计划员、ME 工程（BOM 维护）、IT 管理员。</li>
+        <li>完成基础扫码与贴标作业实操考核，全员理解「实物移动必伴随系统扫码」。</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <div class="card-title">2. 物理仓区与防静电/防潮达标（场）</div>
+      <ul>
+        <li><strong>电子料主仓（EPA 防静电区）</strong>：恒温 20–26°C、相对湿度 30–60% RH，防静电地板与接地达标。</li>
+        <li><strong>MSD 防潮专仓</strong>：配置 RH &lt; 5% 低湿氮气柜/电子防潮柜及 40°C/125°C 精密工业烘箱。</li>
+        <li><strong>五区硬隔离</strong>：收货/IQC 待检区、良品主库区、MSD 防潮区、产线线边暂存区、MRB 不良/报废隔离区。</li>
+        <li><strong>储位物理编码落地</strong>：所有货架/料车完成物理贴码（如 <span class="mono">A-01-01</span> 排-架-层），与系统库位 1:1 映射。</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <div class="card-title">3. 网络与 IT 部署环境就绪（网/算）</div>
+      <ul>
+        <li><strong>全库区无死角覆盖</strong>：收发料操作台布设千兆有线网口；库区与 SMT 车间部署工业级 Wi-Fi 6（无缝漫游，避免手持终端断连）。</li>
+        <li><strong>数据库与服务端部署</strong>：生产环境推荐局域网独立服务器部署 React 前端 + <span class="mono">.NET 10 + FreeSql</span> 后端，连接企业 <strong>MSSQL (SQL Server)</strong> 或 PostgreSQL；启用每日全备 + 事务日志备份。</li>
+        <li><strong>打印链路通畅</strong>：网口 Zebra 打印机分配固定静态 IP 且开放 TCP <span class="mono">9100</span> 端口；USB 打印机工位 PC 预装 Zebra Browser Print 服务。</li>
+      </ul>
+    </div>
+    <div class="card card-red">
+      <div class="card-title">4. 不可逾越的 4 条管理红线（制）</div>
+      <ul>
+        <li><strong>红线一：一盘一码</strong>——无系统唯一 Reel UID 标签的料盘严禁上架、严禁发往 SMT 产线。</li>
+        <li><strong>红线二：见单发料</strong>——严禁任何口头借料、先拿料后补单，特殊急料走「补料」流程并记录工单与机台。</li>
+        <li><strong>红线三：敬畏防呆</strong>——严禁人为跳过 FIFO 先进先出拦截，严禁将系统锁定「需烘烤」的 MSD 料盘直接上线。</li>
+        <li><strong>红线四：产权隔离</strong>——客供料与专属定制料严禁跨客户挪用，所有发料必须核验工单归属客户。</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>物理仓区规划与物流动线蓝图</h3>
+  <div class="svg-box">
+    <svg viewBox="0 0 760 190" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#0284c7" />
+        </marker>
+        <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#d97706" />
+        </marker>
+      </defs>
+      <!-- Zone 1 -->
+      <rect x="8" y="20" width="128" height="92" rx="5" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.5"/>
+      <text x="72" y="40" text-anchor="middle" font-size="11" font-weight="700" fill="#0f2942">1. 收货与 IQC 区</text>
+      <text x="72" y="57" text-anchor="middle" font-size="8.5" fill="#475569">ASN 对照核验</text>
+      <text x="72" y="72" text-anchor="middle" font-size="8.5" fill="#475569">扫原厂条码解析</text>
+      <text x="72" y="87" text-anchor="middle" font-size="8.5" fill="#0369a1" font-weight="600">Zebra ZPL 赋唯一UID</text>
+      <text x="72" y="102" text-anchor="middle" font-size="8" fill="#64748b">贴标后分流上架</text>
+
+      <!-- Zone 2A -->
+      <rect x="172" y="10" width="160" height="62" rx="5" fill="#ffffff" stroke="#0f2942" stroke-width="1.5"/>
+      <text x="252" y="29" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0f2942">2A. 电子料主库区 (WH-SMT)</text>
+      <text x="252" y="45" text-anchor="middle" font-size="8.5" fill="#475569">20-26°C / 30-60%RH · 防静电料架</text>
+      <text x="252" y="60" text-anchor="middle" font-size="8.2" fill="#0369a1">按 产权(自购/客供/VMI) + 库位码 存放</text>
+
+      <!-- Zone 2B -->
+      <rect x="172" y="84" width="160" height="62" rx="5" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+      <text x="252" y="103" text-anchor="middle" font-size="10.5" font-weight="700" fill="#92400e">2B. MSD 防潮烘烤专仓</text>
+      <text x="252" y="119" text-anchor="middle" font-size="8.5" fill="#78350f">氮气柜 RH&lt;5% + 125°C 工业烤箱</text>
+      <text x="252" y="134" text-anchor="middle" font-size="8.2" fill="#b45309">MSL 2a–5a 拆封计时 / 超时锁盘烘烤</text>
+
+      <!-- Zone 3 -->
+      <rect x="370" y="25" width="142" height="90" rx="5" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+      <text x="441" y="45" text-anchor="middle" font-size="11" font-weight="700" fill="#14532d">3. 波次备料与发料区</text>
+      <text x="441" y="62" text-anchor="middle" font-size="8.5" fill="#166534">多工单合并波次齐套</text>
+      <text x="441" y="77" text-anchor="middle" font-size="8.5" fill="#166534">强制 FIFO DateCode 拣货</text>
+      <text x="441" y="92" text-anchor="middle" font-size="8.5" fill="#166534">客户产权防混发硬拦截</text>
+      <text x="441" y="106" text-anchor="middle" font-size="8" fill="#15803d">备料车配送至 SMT 线边</text>
+
+      <!-- Zone 4 -->
+      <rect x="550" y="25" width="198" height="90" rx="5" fill="#0f2942" stroke="#0f2942" stroke-width="1.5"/>
+      <text x="649" y="46" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">4. SMT 产线线边仓 (LINE-SIDE)</text>
+      <text x="649" y="64" text-anchor="middle" font-size="8.5" fill="#bae6fd">按工单/机台/站位上线贴片</text>
+      <text x="649" y="79" text-anchor="middle" font-size="8.5" fill="#bae6fd">抛料/损耗 → 扫码触发产线补料</text>
+      <text x="649" y="94" text-anchor="middle" font-size="8.5" fill="#7dd3fc">完工余料 → X-Ray 点数 → 退料/拆子盘</text>
+      <text x="649" y="108" text-anchor="middle" font-size="8" fill="#cbd5e1">MSD 拆封自动开始车间寿命倒计时</text>
+
+      <!-- Zone 5 -->
+      <rect x="550" y="138" width="198" height="42" rx="5" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5"/>
+      <text x="649" y="156" text-anchor="middle" font-size="10" font-weight="700" fill="#991b1b">5. MRB 不良 / 报废隔离区</text>
+      <text x="649" y="171" text-anchor="middle" font-size="8.2" fill="#7f1d1d">损毁/过期料隔离处置 + 账务核销留痕</text>
+
+      <!-- Arrows -->
+      <line x1="136" y1="50" x2="170" y2="41" stroke="#0284c7" stroke-width="1.6" marker-end="url(#arrow)"/>
+      <line x1="136" y1="82" x2="170" y2="112" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrowAmber)"/>
+      <line x1="332" y1="41" x2="368" y2="62" stroke="#0284c7" stroke-width="1.6" marker-end="url(#arrow)"/>
+      <line x1="332" y1="112" x2="368" y2="82" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrowAmber)"/>
+      <line x1="512" y1="70" x2="548" y2="70" stroke="#0284c7" stroke-width="1.8" marker-end="url(#arrow)"/>
+      <line x1="649" y1="115" x2="649" y2="136" stroke="#dc2626" stroke-width="1.4" stroke-dasharray="3,2"/>
+      <!-- Return loop -->
+      <path d="M 550 104 L 530 104 L 530 165 L 252 165 L 252 148" fill="none" stroke="#0284c7" stroke-width="1.4" stroke-dasharray="4,2" marker-end="url(#arrow)"/>
+      <text x="392" y="177" text-anchor="middle" font-size="8.2" fill="#0369a1" font-weight="600">完工余料复点退库 / 拆子盘赋新码回仓（MSD回防潮柜）</text>
+    </svg>
+    <div class="svg-caption">图 1-1：新建 SMT 工厂五区隔离布局与全链路物料流转闭环</div>
+  </div>
+</section>
+
+<!-- ==================== PAGE 4: MASTER DATA PREP (PART 1) ==================== -->
+<section class="page-break">
+  <div class="page-meta">
+    <span>第二章：主数据准备清单与初始化规范</span>
+    <span>7 大基础档案 · 4 批次导入顺序</span>
+  </div>
+
+  <div class="section-header">
+    <span class="section-num">02</span>
+    <h2 class="section-title">主数据准备清单与 4 批次初始化规范</h2>
+    <span class="section-en">MASTER DATA PREPARATION</span>
+  </div>
+
+  <p>
+    主数据质量直接决定 SMT-WMS 上线成败。结合本系统的关系型表结构与外键依赖，新建工厂必须严格按照<strong>「4 批次、8 类台账」</strong>的先后顺序完成数据清洗与录入，杜绝「先录库存再补档案」导致的数据孤岛。
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:9%;">批次</th>
+        <th style="width:20%;">系统模块 / 数据表</th>
+        <th style="width:36%;">必须准备的核心字段与业务含义</th>
+        <th style="width:17%;">责任部门</th>
+        <th style="width:18%;">数据准备要点</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-blue">第 1 批</span></td>
+        <td><strong>仓库 / 仓管员 / 库位</strong><br/><span class="mono">warehouses / bins</span></td>
+        <td>仓库编码、温湿度属性、库位编码（排-架-层）、库区类型、最大料盘容量、负责仓管员与班次。</td>
+        <td>仓库主管<br/>行政/设施</td>
+        <td>库位码需同步打印贴于货架物理位置，做到账架一致。</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">第 1 批</span></td>
+        <td><strong>供应商与客户档案</strong><br/><span class="mono">suppliers / customers</span></td>
+        <td>供应商编码/名称/免检等级/交期；客户编码/名称/所属行业/追溯合规等级（如 IPC-1782 Level 3）。</td>
+        <td>采购部<br/>业务/客服</td>
+        <td>客供料与专属物料的归属依赖客户档案，须优先冻结编码。</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-amber">第 2 批</span></td>
+        <td><strong>包装方式与 SPQ</strong><br/><span class="mono">packaging_specs</span></td>
+        <td>包装编码（如 7寸8mm卷盘 / JEDEC Tray）、载体类型、盘径/带宽/间距、标准最小包装量 SPQ、是否允许拆盘/合盘。</td>
+        <td>IQC / 仓库<br/>工艺工程</td>
+        <td>决定收料默认数量校验及退料时是否允许拆子盘。</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-amber">第 2 批</span></td>
+        <td><strong>供应商条码解析规则</strong><br/><span class="mono">barcode_rules</span></td>
+        <td>针对主要供应商（或通用规则）配置格式类型（KV 键值对 / 分隔符位置 / AI 前缀）、分隔符与字段映射（MPN/Lot/DC/Qty）及样例码。</td>
+        <td>IQC / IT</td>
+        <td>提前收集 Top 20 核心供应商实物标签拍照并做扫码解析实测。</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-amber">第 2 批</span></td>
+        <td><strong>ZPL 标签模板档案</strong><br/><span class="mono">label_templates</span></td>
+        <td>纸张尺寸（如 70×40mm / 50×30mm / 自定义 mm）、打印精度（203/300/600 DPI）、整体 X/Y 偏移校准、条码类型（Code128/QR/DM）及文字排版。</td>
+        <td>仓库 / IT</td>
+        <td>每种标签纸实机打样 3 张，实测扫码枪 100% 一扫即通后锁定默认模板。</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-green">第 3 批</span></td>
+        <td><strong>物料清单（复合主键）</strong><br/><span class="mono">materials</span></td>
+        <td>料号（<strong>默认自动取 MPN，支持自定义修改</strong>）、MPN、描述、<strong>产权类型 + 归属编码</strong>、业务客户、封装、包装方式/SPQ、MSL 湿敏等级、默认供应商、安全库存、推荐库位。</td>
+        <td>工程部 (ME)<br/>PMC / 采购</td>
+        <td>核心主数据！必须明确每一颗料的 MSL 等级与产权归属。</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-green">第 4 批</span></td>
+        <td><strong>单表机型 BOM 清单</strong><br/><span class="mono">boms</span></td>
+        <td>机型编码/版本、归属客户、工艺类型；单表维护明细行：料号、单板用量、损耗率、贴片位号、角色（<strong>主料 / 特料 / 代用料</strong>）及所替代主料。</td>
+        <td>工程部 (ME)<br/>NPI</td>
+        <td>用单表解决特料与代用关系，确保波次齐套不重复扣减需求。</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-red">第 4 批</span></td>
+        <td><strong>期初库存与在制工单</strong><br/><span class="mono">reels / work_orders</span></td>
+        <td>上线前静态盘点清单：每盘实际余量、4 位 YYWW DateCode、Lot 批次、实测库位、MSD 是否已拆封；首批待排产工单。</td>
+        <td>仓库 / PMC<br/>财务审计</td>
+        <td>上线切换日执行全面静态盘点，逐盘打印系统 UID 标签贴盘入账。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>本系统 3 项关键主数据建模规范（新厂务必遵循）</h3>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">1. 物料复合主键与 MPN 规则</div>
+      <p style="font-size:8.2pt;margin:0;">
+        同一原厂料号（如 <span class="mono">STM32F407VET6</span>）可能同时存在「自购公用」「A 客户客供」「B 客户专属」库存。本系统采用 <strong><span class="mono">SKU + 产权类型 + 归属编码</span></strong> 作为唯一主键；新建料号默认自动沿用 MPN（减少编码维护成本），也可按工厂内部规则自由覆盖。
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">2. 非客供料的客户归属绑定</div>
+      <p style="font-size:8.2pt;margin:0;">
+        即使物料产权为「自购」或「VMI 寄售」，若该料专为某大客户备货，可在物料清单中勾选对应<strong>业务客户</strong>。波次发料与产线补料时，系统优先消耗匹配客户库存，并<strong>阻断跨客户误发</strong>，避免交付违约。
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">3. 单表管理主料 / 特料 / 代用料</div>
+      <p style="font-size:8.2pt;margin:0;">
+        放弃繁琐的多表替代关系维护，在单一 BOM 表中通过 <span class="mono">itemRole</span>（主料 MAIN / 特料 SPECIAL_MAIN / 代用料 SUBSTITUTE）与 <span class="mono">substituteFor</span> 字段直观表达替代优先级，既方便工程核对，又保障齐套计算精准。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== PAGE 5: DATA GOVERNANCE & CODING STANDARDS ==================== -->
+<section class="page-break">
+  <div class="page-meta">
+    <span>第二章：主数据准备清单与初始化规范（续）</span>
+    <span>编码规范 · 条码与 ZPL 标签标准化</span>
+  </div>
+
+  <h3>新建工厂推荐编码与条码标准化模板</h3>
+  <p>新建工厂没有历史包袱，是建立统一、可读、易扩展编码体系的最佳时机。建议直接沿用以下与系统内置规则一致的标准化编码规范：</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:18%;">编码对象</th>
+        <th style="width:26%;">推荐格式示例</th>
+        <th style="width:34%;">分段含义与防错设计</th>
+        <th style="width:22%;">系统对应规则</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>仓库编码</strong></td>
+        <td><span class="mono">WH-SMT-01</span> / <span class="mono">WH-MSD-01</span></td>
+        <td>WH + 业务属性（SMT主仓/MSD防潮仓/LINE线边）+ 序号</td>
+        <td>仓库档案主键</td>
+      </tr>
+      <tr>
+        <td><strong>库位编码</strong></td>
+        <td><span class="mono">A-01-02</span> / <span class="mono">MSD-02-01</span></td>
+        <td>区/排（A/MSD）+ 货架号（01）+ 层/格位（02）</td>
+        <td>货架物理条码 1:1 一致</td>
+      </tr>
+      <tr>
+        <td><strong>料盘唯一码 (UID)</strong></td>
+        <td><span class="mono">RL261119-001</span></td>
+        <td>RL + 年月日（YYMMDD）+ 流水号；退料拆分子盘自动追加 <span class="mono">-R1</span></td>
+        <td>全局唯一追溯锚点</td>
+      </tr>
+      <tr>
+        <td><strong>生产周期 (DateCode)</strong></td>
+        <td><span class="mono">2645</span>（严格 4 位数字）</td>
+        <td>YY（2026 年）+ WW（第 45 周），杜绝手填文字导致 FIFO 排序失效</td>
+        <td>系统强制 4 位校验与升序 FIFO</td>
+      </tr>
+      <tr>
+        <td><strong>包装规格编码</strong></td>
+        <td><span class="mono">PKG-7IN-8MM-5K</span></td>
+        <td>PKG + 盘径/载体 + 带宽 + 标准 SPQ，仓管员一眼识别</td>
+        <td>收料默认 SPQ 与拆合盘控制</td>
+      </tr>
+      <tr>
+        <td><strong>复合二维条码内容</strong></td>
+        <td><span class="mono">UID:RL...|MPN:...|LOT:...|DC:2645|QTY:500</span></td>
+        <td>键值对竖线分隔，兼容手机、PDA 与任意品牌二维扫码枪一扫解析 5 字段</td>
+        <td>内置标准规则 + Zebra 模板输出</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>MSD 湿敏等级与车间暴露寿命（Floor Life）对照基准</h3>
+  <p>依据 IPC/JEDEC J-STD-033 标准，系统已内置以下各级别默认暴露计时策略，工程部在录入物料清单时须核对原厂 Datasheet 准确填报：</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:14%;">MSL 等级</th>
+        <th style="width:18%;">车间暴露寿命 (≤30°C/60%RH)</th>
+        <th style="width:24%;">系统自动管控行为</th>
+        <th style="width:22%;">推荐存放库区</th>
+        <th style="width:22%;">超时后标准处置</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Level 1</strong></td>
+        <td>无限制</td>
+        <td>不启动拆封计时，正常 FIFO 发料</td>
+        <td>电子料主库区 (WH-SMT)</td>
+        <td>无需烘烤</td>
+      </tr>
+      <tr>
+        <td><strong>Level 2</strong></td>
+        <td>1 年（8,760 小时）</td>
+        <td>发料拆封记录开封时间，低风险预警</td>
+        <td>电子料主库区 / 密封袋</td>
+        <td>超时提示复检或干燥</td>
+      </tr>
+      <tr>
+        <td><strong>Level 2a</strong></td>
+        <td>4 周（672 小时）</td>
+        <td>拆封自动倒计时，剩余 &lt;20% 看板预警</td>
+        <td>防潮柜 (RH&lt;10%)</td>
+        <td>系统锁盘，烘烤复位</td>
+      </tr>
+      <tr>
+        <td><strong>Level 3</strong></td>
+        <td>168 小时（7 天）</td>
+        <td>SMT 最常见 IC 等级；拆封即计时，超时硬锁定</td>
+        <td>低湿氮气柜 (RH&lt;5%)</td>
+        <td>125°C 烘烤 + 系统 <span class="mono">MSD_BAKE</span></td>
+      </tr>
+      <tr>
+        <td><strong>Level 4</strong></td>
+        <td>72 小时（3 天）</td>
+        <td>高敏 QFN/BGA；临期红色高亮，退库必须回防潮柜</td>
+        <td>低湿氮气柜 (RH&lt;5%)</td>
+        <td>125°C 烘烤 + 抽真空重封</td>
+      </tr>
+      <tr>
+        <td><strong>Level 5 / 5a</strong></td>
+        <td>48 小时 / 24 小时</td>
+        <td>极高敏器件；建议单班按需现拆现贴</td>
+        <td>超低湿氮气柜 + 专人盯控</td>
+        <td>严格按原厂曲线烘烤复位</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>数据准备验收标准（Go / No-Go 检查点）：</strong>
+    在进入第 5 周试运行前，必须达成：① Top 100 常用物料 100% 完成复合主键、MSL 等级与包装 SPQ 维护；② 至少 3 个量产主力机型完成单表 BOM（含特料与代用料）校验；③ 所有主要供应商原厂标签在「条码解析规则」中实测通过率 100%。
+  </div>
+</section>
+
+<!-- ==================== PAGE 6: HARDWARE & DEPLOYMENT ==================== -->
+<section class="page-break">
+  <div class="page-meta">
+    <span>第三章：硬件设备选型与技术部署架构</span>
+    <span>打印 · 扫码 · 点数 · 防潮 · 多数据库架构</span>
+  </div>
+
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <h2 class="section-title">硬件设备选型清单与技术部署架构</h2>
+    <span class="section-en">HARDWARE &amp; SYSTEM ARCHITECTURE</span>
+  </div>
+
+  <p>以新建 <strong>2–4 条 SMT 产线（中等起步规模）</strong> 为基准，以下是与本系统软硬件接口完全匹配的推荐设备配置清单（产线倍增时按工位线性扩容即可）：</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:15%;">硬件类别</th>
+        <th style="width:23%;">推荐型号 / 关键技术规格</th>
+        <th style="width:11%;">建议数量</th>
+        <th style="width:20%;">部署工位</th>
+        <th style="width:31%;">与本 SMT-WMS 对接方式及选型要点</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Zebra 条码打印机</strong></td>
+        <td>Zebra <strong>ZT411 / ZT231</strong>（工业）或 <strong>ZD621</strong>（桌面）；<strong>必选 300 DPI</strong>，支持 ZPL-II 与以太网口</td>
+        <td>2–3 台<br/>（含1台备用）</td>
+        <td>IQC 收料赋码台<br/>退料拆盘台</td>
+        <td>优先 <strong>LAN TCP 9100 直连</strong>（静态 IP，后端直推 ZPL）；若 WMS 部署在云端则用 <strong>USB + Zebra Browser Print</strong>。</td>
+      </tr>
+      <tr>
+        <td><strong>标签耗材</strong></td>
+        <td>70×40mm / 50×30mm 哑银或防静电铜版纸 + 混合基/全树脂碳带</td>
+        <td>常备 3 个月用量</td>
+        <td>随打印机配置</td>
+        <td>贴片料盘表面微弧且可能过低温烘烤，需防翘边、耐刮擦、防静电胶面。</td>
+      </tr>
+      <tr>
+        <td><strong>工业二维扫码枪</strong></td>
+        <td>Zebra DS3678 / Honeywell 1952g（无线 2D，支持 <strong>3mil 高密度 DataMatrix</strong>）</td>
+        <td>4–6 把</td>
+        <td>收料台、发料台、退料台、线边</td>
+        <td>HID 键盘仿真模式（追加回车 CR），即插即用，兼容全局扫码追溯与波次 FIFO 核验。</td>
+      </tr>
+      <tr>
+        <td><strong>工业安卓 PDA</strong></td>
+        <td>Zebra TC22 / 优博讯工业 PDA（5寸屏 + 专业二维扫描引擎 + Wi-Fi 6）</td>
+        <td>2–4 台<br/>（选配增强）</td>
+        <td>波次走动拣料<br/>循环盘点</td>
+        <td>直接浏览器访问响应式 Web 端，大幅提升货架走动拣料与区位盘点效率。</td>
+      </tr>
+      <tr>
+        <td><strong>点数机</strong></td>
+        <td>X-Ray 智能点料机（优选）或全自动光学料带点数机</td>
+        <td>1–2 台</td>
+        <td>退料复点工位<br/>IQC 抽检</td>
+        <td><strong>解决退料账实不准的关键设备</strong>；复点真实余量后回填系统拆子盘并重打 ZPL 标签。</td>
+      </tr>
+      <tr>
+        <td><strong>防潮与烘烤设备</strong></td>
+        <td>RH &lt; 5% 氮气/电子防潮柜 + 40°C/125°C 精密恒温工业烤箱</td>
+        <td>防潮柜 2–4 台<br/>烤箱 1–2 台</td>
+        <td>MSD 防潮专仓</td>
+        <td>与系统 MSD 倒计时及 <span class="mono">MSD_BAKE</span> 烘烤复位流程形成硬闭环。</td>
+      </tr>
+      <tr>
+        <td><strong>操作台终端 PC</strong></td>
+        <td>工业触控一体机或商用 PC（22寸以上屏，Chrome/Edge 浏览器）</td>
+        <td>3–4 台</td>
+        <td>收料台、备料发料台、退料台</td>
+        <td>收发料工位固定操作站，大屏同时展示库存看板、BOM 齐套与 ZPL 实时预览。</td>
+      </tr>
+      <tr>
+        <td><strong>服务器底座</strong></td>
+        <td>2 核 8G+ 应用服务器（可容器化）+ 4 核 16G+ 数据库服务器（RAID10 SSD）</td>
+        <td>1–2 台<br/>（或虚拟机）</td>
+        <td>工厂机房 / 私有云</td>
+        <td>运行 React 前端 + <span class="mono">.NET 10 WebApi</span>，连接企业 <strong>MSSQL 2019/2022</strong> 或 PostgreSQL。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>前后端分离 + .NET 10 + FreeSql 多数据库部署架构</h3>
+  <div class="svg-box">
+    <svg viewBox="0 0 760 175" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <!-- Client Tier -->
+      <rect x="10" y="16" width="160" height="142" rx="5" fill="#f8fafc" stroke="#64748b" stroke-width="1.4"/>
+      <text x="90" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#0f2942">车间终端层 (React SPA)</text>
+      <rect x="22" y="45" width="136" height="28" rx="3" fill="#e0f2fe" stroke="#0284c7"/>
+      <text x="90" y="63" text-anchor="middle" font-size="8.5" fill="#0c4a6e">收/发/退料工位 PC + 扫码枪</text>
+      <rect x="22" y="81" width="136" height="28" rx="3" fill="#e0f2fe" stroke="#0284c7"/>
+      <text x="90" y="99" text-anchor="middle" font-size="8.5" fill="#0c4a6e">工业 PDA / 车间大屏看板</text>
+      <rect x="22" y="117" width="136" height="28" rx="3" fill="#fef3c7" stroke="#d97706"/>
+      <text x="90" y="135" text-anchor="middle" font-size="8.2" fill="#92400e">本机 Zebra Browser Print</text>
+
+      <!-- API Tier -->
+      <rect x="215" y="16" width="235" height="142" rx="5" fill="#0f2942" stroke="#0f2942" stroke-width="1.4"/>
+      <text x="332" y="35" text-anchor="middle" font-size="10.2" font-weight="700" fill="#ffffff">.NET 10 WebApi (DDD 四层架构)</text>
+      <rect x="229" y="45" width="207" height="23" rx="3" fill="#1e3a5f" stroke="#38bdf8"/>
+      <text x="332" y="60" text-anchor="middle" font-size="8.2" fill="#e0f2fe">WebApi：CORS / 会话鉴权 / OpenAPI 3.1</text>
+      <rect x="229" y="73" width="207" height="23" rx="3" fill="#1e3a5f" stroke="#38bdf8"/>
+      <text x="332" y="88" text-anchor="middle" font-size="8.2" fill="#e0f2fe">Application：收发退/波次/BOM/盘点用例</text>
+      <rect x="229" y="101" width="207" height="23" rx="3" fill="#1e3a5f" stroke="#38bdf8"/>
+      <text x="332" y="116" text-anchor="middle" font-size="8.2" fill="#e0f2fe">Domain：复合主键 / FIFO / MSD 领域策略</text>
+      <rect x="229" y="129" width="207" height="23" rx="3" fill="#0284c7"/>
+      <text x="332" y="144" text-anchor="middle" font-size="8.2" font-weight="700" fill="#ffffff">Infrastructure：FreeSql 多库 + TCP 9100</text>
+
+      <!-- Data & Hardware Tier -->
+      <rect x="495" y="16" width="255" height="90" rx="5" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.4"/>
+      <text x="622" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#0f2942">FreeSql 多数据库持久化层</text>
+      <rect x="508" y="44" width="110" height="24" rx="3" fill="#0f2942"/>
+      <text x="563" y="59" text-anchor="middle" font-size="8.2" font-weight="700" fill="#7dd3fc">MSSQL (企业主力)</text>
+      <rect x="628" y="44" width="110" height="24" rx="3" fill="#ffffff" stroke="#0284c7"/>
+      <text x="683" y="59" text-anchor="middle" font-size="8.2" fill="#0369a1">SQLite (单机/边端)</text>
+      <rect x="508" y="74" width="110" height="24" rx="3" fill="#ffffff" stroke="#0284c7"/>
+      <text x="563" y="89" text-anchor="middle" font-size="8.2" fill="#0369a1">PostgreSQL / MySQL</text>
+      <rect x="628" y="74" width="110" height="24" rx="3" fill="#dcfce7" stroke="#16a34a"/>
+      <text x="683" y="89" text-anchor="middle" font-size="8" fill="#166534">多库扩展 (ERP/MES)</text>
+
+      <rect x="495" y="118" width="255" height="40" rx="5" fill="#fffbeb" stroke="#d97706" stroke-width="1.4"/>
+      <text x="622" y="135" text-anchor="middle" font-size="9.5" font-weight="700" fill="#92400e">车间局域网 Zebra 打印机群 (TCP 9100)</text>
+      <text x="622" y="150" text-anchor="middle" font-size="8" fill="#78350f">300 DPI 热转印 · Raw ZPL 毫秒级直打无弹窗</text>
+
+      <!-- Connectors -->
+      <line x1="170" y1="84" x2="213" y2="84" stroke="#0284c7" stroke-width="1.8" marker-end="url(#arrow)"/>
+      <text x="191" y="76" text-anchor="middle" font-size="7.2" fill="#0369a1">HTTPS/JSON</text>
+      <line x1="450" y1="62" x2="493" y2="62" stroke="#0284c7" stroke-width="1.8" marker-end="url(#arrow)"/>
+      <line x1="450" y1="138" x2="493" y2="138" stroke="#d97706" stroke-width="1.8" marker-end="url(#arrowAmber)"/>
+    </svg>
+    <div class="svg-caption">图 3-1：前后端分离与 FreeSql 多数据库（含 MSSQL 读写分离及 Zebra TCP 直连）技术架构</div>
+  </div>
+</section>
+
+<!-- ==================== PAGE 7: MANAGEMENT MODEL (PART 1) ==================== -->
+<section class="page-break">
+  <div class="page-meta">
+    <span>第四章：SMT 车间管理模式与作业闭环设计</span>
+    <span>6 大核心管控机制（1–3）</span>
+  </div>
+
+  <div class="section-header">
+    <span class="section-num">04</span>
+    <h2 class="section-title">SMT 车间管理模式与 6 大作业闭环设计</h2>
+    <span class="section-en">WORKSHOP OPERATING MODEL &amp; SOP</span>
+  </div>
+
+  <p>
+    新建工厂应一步到位建立<strong>「计划驱动 + 条码防呆 + 产权隔离 + 湿敏闭环 + 数据追责」</strong>的精益电子仓管理模式，彻底告别手工 Excel 台账与「凭老师傅记忆找料」。以下六大管理机制与系统功能逐一咬合：
+  </p>
+
+  <h3>机制一：ASN 预入库与「一盘一码」赋码上架闭环</h3>
+  <div class="card" style="margin-bottom:10px;">
+    <ol style="margin:0;">
+      <li><strong>预约建单</strong>：采购下单后，在系统手工创建或通过 <strong>CSV 一键导入 ASN 预约入库单</strong>（含 PO 号、供应商、预计数量、目标库位）。</li>
+      <li><strong>到货扫码解析</strong>：IQC 检验合格后，仓管员用二维扫码枪扫描原厂料盘条码；系统自动匹配该供应商的 <strong>条码解析规则</strong>，瞬间提取 MPN、Lot、4 位 DateCode 与数量。</li>
+      <li><strong>赋唯一 UID 与 ZPL 打标</strong>：核对包装 SPQ 无误后提交入库，系统自动生成全局唯一 <span class="mono">Reel UID</span>，并直推 <strong>Zebra 打印机</strong>输出含二维复合码、产权标识、MSL 等级与库位信息的标准标签。</li>
+      <li><strong>按推荐库位上架</strong>：仓管员贴标后放入对应防静电架或 MSD 防潮柜；ASN 明细自动累计实收进度，杜绝超收、错收。</li>
+    </ol>
+  </div>
+
+  <h3>机制二：客供 / VMI / 专属物料「产权与客户隔离」管控</h3>
+  <div class="card" style="margin-bottom:10px;">
+    <div class="grid-2" style="margin:0;">
+      <div>
+        <div class="card-title" style="color:#0369a1;">物理 + 账务双重隔离</div>
+        <p style="font-size:8.4pt;margin:0;">
+          通过物料复合主键 <span class="mono">SKU + 产权 + 归属编码</span>，系统在账面上天然隔离同一料号的自购料与各家客户客供料；实体货架建议用不同颜色标识牌划分「公用区」与「大客户专料区」。
+        </p>
+      </div>
+      <div>
+        <div class="card-title" style="color:#dc2626;">系统硬拦截跨客户混发</div>
+        <p style="font-size:8.4pt;margin:0;">
+          当新建工单关联特定客户后，波次发料与产线补料会自动优先锁定该客户的客供/专属料盘，允许补充使用公用自购料，但<strong>严禁将 B 客户客供料或专属料发给 A 客户工单</strong>，从机制上消灭赔款风险。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <h3>机制三：多工单波次齐套与「强制 FIFO 先进先出」防呆</h3>
+  <div class="card" style="margin-bottom:10px;">
+    <ol style="margin:0;">
+      <li><strong>单表 BOM 精准齐套</strong>：PMC 排产建立工单时直接关联单表 BOM（自动识别主料、特料及代用料）。合并多张同线或同班次工单生成<strong>发料波次 (Wave)</strong>，系统秒级核算可用库存并输出精确的<strong>缺料清单</strong>，避免上线后才发现停线待料。</li>
+      <li><strong>DateCode 升序自动锁盘</strong>：创建波次时，系统自动跳过「MSD 需烘烤」与状态异常料盘，严格按 <strong>4 位 DateCode 升序 → 入库时间升序</strong>分配最早批次料盘。</li>
+      <li><strong>拣料扫码 FIFO 硬防呆</strong>：仓管员拣货扫码确认时，若拿取了较新批次的料盘而同料号尚有更老批次未发出，系统<strong>立即弹窗硬拦截报错</strong>，强制纠正拿料顺序，实现 0 人工干预的真 FIFO。</li>
+    </ol>
+  </div>
+
+  <div class="callout">
+    <strong>管理模式核心变革：</strong>传统工厂靠「仓管员自觉看日期」执行 FIFO，准确率通常低于 75%；导入本系统后，将 FIFO、客户防混发、MSD 烘烤检查全部下沉为<strong>扫码瞬间的系统硬校验</strong>，新员工培训 1 天即可达到资深仓管员的防错水准。
+  </div>
+</section>
+
+<!-- ==================== PAGE 8: MANAGEMENT MODEL (PART 2) ==================== -->
+<section class="page-break">
+  <div class="page-meta">
+    <span>第四章：SMT 车间管理模式与作业闭环设计（续）</span>
+    <span>6 大核心管控机制（4–6）</span>
+  </div>
+
+  <h3>机制四：MSD 湿敏元件全生命周期防潮烘烤闭环</h3>
+  <div class="card card-warn" style="margin-bottom:10px;">
+    <p style="margin-bottom:5px;">
+      针对 Level 2a–5a 湿敏 IC（如 MCU、BGA、QFN），工厂须严格执行「<strong>入柜密封 → 发料启表 → 超时硬锁 → 烘烤复位</strong>」四步闭环：
+    </p>
+    <ul style="margin:0;">
+      <li><strong>入库密封态 (<span class="mono">SEALED</span>)</strong>：新到真空防潮包装料盘入库后存于氮气柜，不扣减车间寿命。</li>
+      <li><strong>发料自动开封计时 (<span class="mono">OPENED</span>)</strong>：波次发料至 SMT 产线时，系统自动记录拆封时间戳，并在仓储总览看板实时计算剩余暴露小时数。</li>
+      <li><strong>超时强制锁定 (<span class="mono">BAKING_REQUIRED</span>)</strong>：一旦暴露超限，系统自动将料盘置为红色锁定态，<strong>禁止一切发料、补料与波次分配</strong>。</li>
+      <li><strong>烘烤登记与复位 (<span class="mono">MSD_BAKE</span>)</strong>：IQC/MSD 专员按标准曲线（如 125°C 烘烤规定时长）烘烤完毕后，在系统记录烤箱参数与操作人完成复位解锁，全流程可审计。</li>
+    </ul>
+  </div>
+
+  <h3>机制五：产线异常补料、完工退料拆子盘与 MRB 报废</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:18%;">作业场景</th>
+        <th style="width:36%;">标准作业流程 (SOP)</th>
+        <th style="width:26%;">系统数据与防呆动作</th>
+        <th style="width:20%;">管控价值</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>产线异常补料</strong><br/><span class="mono">REPLENISH</span></td>
+        <td>贴片机抛料超标、断带或飞达卡料时，产线物料员持工单与机台号到仓库扫码补领。</td>
+        <td>绑定工单、站位与补料原因，自动累计工单超领率，触发异常看板提示。</td>
+        <td>精准统计抛料损耗，定位异常吸嘴或不良来料批次。</td>
+      </tr>
+      <tr>
+        <td><strong>完工余料退库</strong><br/><span class="mono">RETURN</span></td>
+        <td>工单切线或完工后，余料盘必须先经 <strong>X-Ray / 光学点数机复点真实余量</strong>，再扫码退回库位。</td>
+        <td>支持原盘更新余量或<strong>拆分子盘 (<span class="mono">ParentReelId</span>)</strong>，立刻重打最新余量 ZPL 标签覆盖旧标。</td>
+        <td>彻底根治 SMT 车间「退料靠估算」导致的账实黑洞。</td>
+      </tr>
+      <tr>
+        <td><strong>不良与报废处置</strong><br/><span class="mono">SCRAP</span></td>
+        <td>受潮不可恢复、氧化、跌落损毁物料移入 MRB 隔离区，经品质确认后执行系统报废。</td>
+        <td>扣减库存并归档报废原因、处置方式（供应商退赔/折价/销毁）与责任人。</td>
+        <td>杜绝不良料误回良品库，为财务成本核算提供依据。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>机制六：ABC 分类循环盘点与全链路正反向追溯</h3>
+  <div class="grid-2">
+    <div class="card card-accent">
+      <div class="card-title">ABC 频次循环盘点（不停产盘点）</div>
+      <ul>
+        <li><strong>A 类高价值/关键 IC（每周盘点）</strong>：按库区在系统创建循环盘点任务，实盘录入后系统自动算盈亏并生成调账流水。</li>
+        <li><strong>B 类常规贴片件（每月盘点）</strong>：结合月底关账抽盘，差异率超过 0.2% 触发复盘。</li>
+        <li><strong>C 类低值通用阻容（每季盘点）</strong>：重点核对料盘数与整盘 SPQ 一致性。</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <div class="card-title">3 秒正反向全链路追溯（满足审计）</div>
+      <ul>
+        <li><strong>正向追溯（批次 → 工单）</strong>：输入原厂 Lot 号或供应商名称，立即查出所有关联料盘去了哪些工单、哪条产线，一键锁定召回范围。</li>
+        <li><strong>反向追溯（工单 → 来料）</strong>：输入问题工单号，秒级导出所用全部 Reel UID、原厂 DateCode、收料单号及操作员，满足 IATF16949 / IPC-1782 客户验厂。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== PAGE 9: RACI & 8-WEEK ROADMAP ==================== -->
+<section class="page-break">
+  <div class="page-meta">
+    <span>第五章：组织协同、实施路线图与验收 KPI</span>
+    <span>RACI 矩阵 · 8 周分阶段上线计划</span>
+  </div>
+
+  <div class="section-header">
+    <span class="section-num">05</span>
+    <h2 class="section-title">RACI 职责矩阵与 8 周分阶段上线路线图</h2>
+    <span class="section-en">GOVERNANCE &amp; 8-WEEK ROADMAP</span>
+  </div>
+
+  <h3>跨部门岗位 RACI 职责矩阵（R=执行 / A=审批负责 / C=协作 / I=知情）</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%;">核心管理活动</th>
+        <th style="width:12%;">仓库主管</th>
+        <th style="width:12%;">仓管员</th>
+        <th style="width:12%;">IQC/MSD</th>
+        <th style="width:12%;">PMC/计划</th>
+        <th style="width:13%;">ME/工程</th>
+        <th style="width:13%;">IT 管理员</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>仓库 / 库位 / 包装 SPQ 维护</td>
+        <td><strong>A / R</strong></td><td>C</td><td>C</td><td>I</td><td>C</td><td>I</td>
+      </tr>
+      <tr>
+        <td>物料清单（MPN/产权/MSL）维护</td>
+        <td>C</td><td>I</td><td>C</td><td>C</td><td><strong>A / R</strong></td><td>I</td>
+      </tr>
+      <tr>
+        <td>单表机型 BOM（特料/代用）维护</td>
+        <td>I</td><td>I</td><td>I</td><td>C</td><td><strong>A / R</strong></td><td>I</td>
+      </tr>
+      <tr>
+        <td>供应商条码规则 &amp; ZPL 模板调试</td>
+        <td><strong>A</strong></td><td>C</td><td>R</td><td>I</td><td>I</td><td><strong>R</strong></td>
+      </tr>
+      <tr>
+        <td>ASN 创建 / 到货收料赋码上架</td>
+        <td>A</td><td><strong>R</strong></td><td>C</td><td>R (ASN)</td><td>I</td><td>I</td>
+      </tr>
+      <tr>
+        <td>工单下达 / 波次齐套 / FIFO 发料</td>
+        <td>A</td><td><strong>R (拣发)</strong></td><td>I</td><td><strong>R (排单)</strong></td><td>I</td><td>I</td>
+      </tr>
+      <tr>
+        <td>MSD 湿敏监控 / 烘烤复位解锁</td>
+        <td>A</td><td>C</td><td><strong>R</strong></td><td>I</td><td>I</td><td>I</td>
+      </tr>
+      <tr>
+        <td>产线补料 / 退料复点拆子盘</td>
+        <td>A</td><td><strong>R</strong></td><td>C</td><td>I</td><td>I</td><td>I</td>
+      </tr>
+      <tr>
+        <td>循环盘点平账 / 报废核销</td>
+        <td><strong>A / R</strong></td><td>R</td><td>C (MRB)</td><td>I</td><td>I</td><td>I</td>
+      </tr>
+      <tr>
+        <td>服务器 / MSSQL 备份 / 账号运维</td>
+        <td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td><strong>A / R</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>新建工厂 8 周落地实施路线图（Gantt 里程碑）</h3>
+  <div class="svg-box">
+    <svg viewBox="0 0 760 205" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <!-- Header Row -->
+      <rect x="0" y="0" width="760" height="26" fill="#0f2942"/>
+      <text x="12" y="17" font-size="9" font-weight="700" fill="#ffffff">实施阶段与关键里程碑任务</text>
+      <text x="275" y="17" text-anchor="middle" font-size="8.5" font-weight="700" fill="#bae6fd">W1</text>
+      <text x="335" y="17" text-anchor="middle" font-size="8.5" font-weight="700" fill="#bae6fd">W2</text>
+      <text x="395" y="17" text-anchor="middle" font-size="8.5" font-weight="700" fill="#bae6fd">W3</text>
+      <text x="455" y="17" text-anchor="middle" font-size="8.5" font-weight="700" fill="#bae6fd">W4</text>
+      <text x="515" y="17" text-anchor="middle" font-size="8.5" font-weight="700" fill="#bae6fd">W5</text>
+      <text x="575" y="17" text-anchor="middle" font-size="8.5" font-weight="700" fill="#bae6fd">W6</text>
+      <text x="635" y="17" text-anchor="middle" font-size="8.5" font-weight="700" fill="#bae6fd">W7</text>
+      <text x="695" y="17" text-anchor="middle" font-size="8.5" font-weight="700" fill="#bae6fd">W8</text>
+
+      <!-- Grid lines -->
+      <g stroke="#e2e8f0" stroke-width="1">
+        <line x1="245" y1="26" x2="245" y2="200"/>
+        <line x1="305" y1="26" x2="305" y2="200"/>
+        <line x1="365" y1="26" x2="365" y2="200"/>
+        <line x1="425" y1="26" x2="425" y2="200"/>
+        <line x1="485" y1="26" x2="485" y2="200"/>
+        <line x1="545" y1="26" x2="545" y2="200"/>
+        <line x1="605" y1="26" x2="605" y2="200"/>
+        <line x1="665" y1="26" x2="665" y2="200"/>
+        <line x1="725" y1="26" x2="725" y2="200"/>
+      </g>
+
+      <!-- Rows -->
+      <g font-size="8.4" fill="#1e293b">
+        <!-- Row 1 -->
+        <rect x="0" y="26" width="760" height="28" fill="#f8fafc"/>
+        <text x="10" y="44" font-weight="700">阶段一：物理仓区规划、货架贴码与硬件到位</text>
+        <rect x="250" y="32" width="110" height="16" rx="3" fill="#0284c7"/>
+        <text x="305" y="43" text-anchor="middle" font-size="7.5" fill="#ffffff" font-weight="700">网络/货架/硬件安装</text>
+
+        <!-- Row 2 -->
+        <rect x="0" y="54" width="760" height="28" fill="#ffffff"/>
+        <text x="10" y="72" font-weight="700">阶段一：部署 .NET 10 + MSSQL 与权限初始化</text>
+        <rect x="285" y="60" width="75" height="16" rx="3" fill="#0369a1"/>
+        <text x="322" y="71" text-anchor="middle" font-size="7.5" fill="#ffffff" font-weight="700">系统部署验收</text>
+
+        <!-- Row 3 -->
+        <rect x="0" y="82" width="760" height="28" fill="#f8fafc"/>
+        <text x="10" y="100" font-weight="700">阶段二：7 大主数据清洗与 4 批次录入校验</text>
+        <rect x="370" y="88" width="110" height="16" rx="3" fill="#d97706"/>
+        <text x="425" y="99" text-anchor="middle" font-size="7.5" fill="#ffffff" font-weight="700">物料/产权/BOM 冻结</text>
+
+        <!-- Row 4 -->
+        <rect x="0" y="110" width="760" height="28" fill="#ffffff"/>
+        <text x="10" y="128" font-weight="700">阶段二：供应商条码规则 &amp; Zebra ZPL 实机打样</text>
+        <rect x="405" y="116" width="75" height="16" rx="3" fill="#b45309"/>
+        <text x="442" y="127" text-anchor="middle" font-size="7.5" fill="#ffffff" font-weight="700">100% 扫打联调</text>
+
+        <!-- Row 5 -->
+        <rect x="0" y="138" width="760" height="28" fill="#f8fafc"/>
+        <text x="10" y="156" font-weight="700">阶段三：1 条 SMT 线全流程试运行（收/发/退/烘）</text>
+        <rect x="490" y="144" width="110" height="16" rx="3" fill="#16a34a"/>
+        <text x="545" y="155" text-anchor="middle" font-size="7.5" fill="#ffffff" font-weight="700">单线闭环双轨验证</text>
+
+        <!-- Row 6 -->
+        <rect x="0" y="166" width="760" height="28" fill="#ffffff"/>
+        <text x="10" y="184" font-weight="700">阶段四：全库静态盘点切换上线 &amp; KPI 考核固化</text>
+        <rect x="610" y="172" width="112" height="16" rx="3" fill="#0f2942"/>
+        <text x="666" y="183" text-anchor="middle" font-size="7.5" fill="#7dd3fc" font-weight="700">全厂切换 + 审计验收</text>
+      </g>
+    </svg>
+    <div class="svg-caption">图 5-1：新建 SMT 工厂 8 周从基础设施到全厂切换的标准实施里程碑</div>
+  </div>
+</section>
+
+<!-- ==================== PAGE 10: KPI & PITFALLS ==================== -->
+<section class="page-break">
+  <div class="page-meta">
+    <span>第五章：验收 KPI 体系与新厂避坑指南</span>
+    <span>量化考核 · 5 大高频陷阱防范</span>
+  </div>
+
+  <h3>上线验收与日常运营 KPI 考核指标</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:20%;">考核维度</th>
+        <th style="width:24%;">KPI 指标名称</th>
+        <th style="width:16%;">目标验收线</th>
+        <th style="width:40%;">数据采集来源与管理动作</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>库存精准度</strong></td>
+        <td>库存账实准确率（盘点）</td>
+        <td><strong>≥ 99.8%</strong></td>
+        <td>来自系统「循环盘点」差异报告；差异盘数超阈值必须追查是否绕过退料复点流程。</td>
+      </tr>
+      <tr>
+        <td><strong>防呆合规度</strong></td>
+        <td>FIFO 先进先出违规率</td>
+        <td><strong>= 0%</strong></td>
+        <td>系统波次扫码硬拦截保障；定期抽查历史发料追溯日志中的 DateCode 顺序。</td>
+      </tr>
+      <tr>
+        <td><strong>品质可靠性</strong></td>
+        <td>MSD 湿敏超时上线率</td>
+        <td><strong>= 0%</strong></td>
+        <td>系统超时自动置为 <span class="mono">BAKING_REQUIRED</span> 锁定；监控看板每日清零待烘烤预警。</td>
+      </tr>
+      <tr>
+        <td><strong>产权风控</strong></td>
+        <td>跨客户错发 / 混发事件</td>
+        <td><strong>= 0 起</strong></td>
+        <td>依靠物料复合主键与客户归属强校验，每月对账导出客供料收发存报表。</td>
+      </tr>
+      <tr>
+        <td><strong>作业效率</strong></td>
+        <td>单盘收料赋码耗时</td>
+        <td><strong>≤ 15 秒 / 盘</strong></td>
+        <td>原厂条码规则自动解析 + Zebra TCP 9100 毫秒直打，消除人工键盘录入。</td>
+      </tr>
+      <tr>
+        <td><strong>追溯响应</strong></td>
+        <td>客户审核 / 异常批次定位时间</td>
+        <td><strong>≤ 10 秒</strong></td>
+        <td>通过顶部「全局扫码追溯」输入 UID/Lot/工单号一键还原完整流转时间轴。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>新建工厂导入 SMT-WMS 最常见的 5 大避坑指南</h3>
+  <div class="card card-red" style="margin-bottom:8px;">
+    <div class="card-title">避坑 1：为了赶进度，跳过「主数据标准化」直接上线收发料</div>
+    <p style="margin:0;font-size:8.5pt;"><strong>后果</strong>：同一物料出现多种命名、MSL 全部默认填 Level 1、包装 SPQ 缺失，导致湿敏报警全部失灵、BOM 齐套算错。<br/><strong>对策</strong>：严格卡住第 4 周数据冻结关口，由 ME 与仓库共同签字确认主数据清单后再开跑试运行。</p>
+  </div>
+  <div class="card card-warn" style="margin-bottom:8px;">
+    <div class="card-title">避坑 2：贪图便宜采购 203 DPI 低精度打印机或普通热敏纸</div>
+    <p style="margin:0;font-size:8.5pt;"><strong>后果</strong>：50×30mm SMT 小标签上的高密度二维复合码边缘发虚，扫码枪反复扫不出；热敏纸过烘箱后发黑失效。<br/><strong>对策</strong>：一步到位选用 <strong>300 DPI 热转印 Zebra 打印机</strong> + 混合基/树脂碳带 + 哑银/防静电铜版纸。</p>
+  </div>
+  <div class="card card-warn" style="margin-bottom:8px;">
+    <div class="card-title">避坑 3：发料管得严，但「产线退料」不复点、不换标</div>
+    <p style="margin:0;font-size:8.5pt;"><strong>后果</strong>：产线肉眼估算退料数量，1 个月后系统账面与料盘真实余量偏差超 15%，直接拖垮波次齐套准确性。<br/><strong>对策</strong>：立下铁律——退料必过 X-Ray/光学点数机，按实测数在系统执行退料/拆子盘并立即重打新标签覆盖旧标。</p>
+  </div>
+  <div class="card card-warn" style="margin-bottom:8px;">
+    <div class="card-title">避坑 4：允许「急单口头先拿料，明天再补账」</div>
+    <p style="margin:0;font-size:8.5pt;"><strong>后果</strong>：一旦开了先例，仓库迅速退化为「事后补录」，FIFO、MSD 计时与实时库存彻底失去可信度。<br/><strong>对策</strong>：急料统一走系统「产线补料」快捷入口（10 秒扫码完成），管理层严查任何无单离线领料行为。</p>
+  </div>
+  <div class="card card-warn" style="margin-bottom:8px;">
+    <div class="card-title">避坑 5：忽视「非客供料」的客户专料归属与备份容灾</div>
+    <p style="margin:0;font-size:8.5pt;"><strong>后果</strong>：A 客户专属自购长交期芯片被 B 客户急单挪用导致停线；或单机硬盘损坏丢失全年追溯数据。<br/><strong>对策</strong>：充分利用本系统「物料业务客户绑定」防混发功能；MSSQL/PostgreSQL 务必配置每日自动异地备份与演练。</p>
+  </div>
+</section>
+
+</body>
+</html>

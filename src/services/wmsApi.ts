@@ -31,6 +31,19 @@ export interface AuthUserProfile {
   authProvider: 'google' | 'password';
 }
 
+const API_BASE_URL = (
+  (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+    ?.VITE_API_BASE_URL ?? ''
+)
+  .trim()
+  .replace(/\/+$/, '');
+
+export function resolveApiUrl(path: string, baseUrl = API_BASE_URL): string {
+  if (!baseUrl || /^https?:\/\//i.test(path)) return path;
+  const cleanBase = baseUrl.trim().replace(/\/+$/, '');
+  return `${cleanBase}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
 let authTokenProvider: (() => Promise<string | null>) | null = null;
 
 export function setAuthTokenProvider(provider: () => Promise<string | null>) {
@@ -47,7 +60,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(url, {
+  const res = await fetch(resolveApiUrl(url), {
     credentials: 'include',
     ...options,
     headers,
