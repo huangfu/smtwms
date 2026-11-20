@@ -52,6 +52,10 @@ import {
   updateWarehouseKeeper,
 } from './wmsLogic';
 import {
+  buildDefaultElementLayouts,
+  buildGlobalShiftZplLines,
+  buildZplVariables,
+  computeBarcodeHriBoxMm,
   generatePseudo2dMatrix,
   generateZplFromTemplate,
   mmToDots,
@@ -1019,7 +1023,7 @@ test('all master data modules support update and delete with referential integri
   assert.equal(bm2.boms.some((b) => b.bomId === tempBom.bomId), false);
 });
 
-test('zplEngine compiles 203/300dpi CODE128, QR, DataMatrix and custom ZPL templates accurately', () => {
+test('zplEngine compiles X/Y mm coordinates into ^FO dots across 203/300dpi, CODE128/QR/DM, rotation, and custom ZPL', () => {
   const seed = createSeedData();
   const reel = seed.reels[0];
   const mat = seed.materials.find((m) => m.skuCode === reel.skuCode);
@@ -1032,9 +1036,19 @@ test('zplEngine compiles 203/300dpi CODE128, QR, DataMatrix and custom ZPL templ
   // 2. ZPL sanitization prevents ^ and ~ injection
   assert.equal(sanitizeZplText('ABC^XZ~HS\nDEF'), 'ABC-XZ-HS DEF');
 
-  // 3. Visual mode CODE128 @ 203dpi
-  const stdTpl = seed.labelTemplates.find((t) => t.templateId === 'TPL-STD-50X30')!;
-  const zpl128 = generateZplFromTemplate({
+  // 3. Explicit X/Y coordinates in mm compile to exact ^FO{xDots},{yDots}
+  const customLayouts = buildDefaultElementLayouts('70x40mm').map((el) =>
+    el.key === 'barcode'
+      ? { ...el, xMm: 40, yMm: 12, fontSizeMm: 10, rotation: 'R' as const }
+      : el
+  );
+  const stdTpl = {
+    ...seed.labelTemplates.find((t) => t.templateId === 'TPL-CONSIGN-70X40')!,
+    dpi: 203 as const,
+    barcodeType: 'QR' as const,
+    elementLayouts: customLayouts,
+  };
+  const zplQrXY = generateZplFromTemplate({
     template: stdTpl,
     reel,
     material: mat,
@@ -1042,21 +1056,25 @@ test('zplEngine compiles 203/300dpi CODE128, QR, DataMatrix and custom ZPL templ
     darkness: 20,
     printSpeed: 5,
   });
-  assert.match(zpl128, /^\^XA/);
-  assert.match(zpl128, /\^PW400/);
-  assert.match(zpl128, /\^LL240/);
-  assert.match(zpl128, /\^MD20/);
-  assert.match(zpl128, /\^PR5/);
+  const expectedX = mmToDots(40, 203); // 320
+  const expectedY = mmToDots(12, 203); // 96
+  assert.match(zplQrXY, /^\^XA/);
+  assert.match(zplQrXY, /\^PW559/);
+  assert.match(zplQrXY, /\^LL320/);
+  assert.match(zplQrXY, /\^MD20/);
+  assert.match(zplQrXY, /\^PR5/);
+  assert.match(zplQrXY, new RegExp(`\\^FO${expectedX},${expectedY}\\^BQR,2,`));
+  assert.match(zplQrXY, /\^PQ3,0,1,Y/);
+  assert.match(zplQrXY, /\^XZ$/);
+
+  // 4. CODE128 and DataMatrix @ 300dpi
+  const zpl128 = generateZplFromTemplate({
+    template: seed.labelTemplates.find((t) => t.templateId === 'TPL-STD-50X30')!,
+    reel,
+    material: mat,
+  });
   assert.match(zpl128, /\^BCN,/);
   assert.match(zpl128, new RegExp(`\\^FD${reel.reelId}\\^FS`));
-  assert.match(zpl128, /\^PQ3,0,1,Y/);
-  assert.match(zpl128, /\^XZ$/);
-
-  // 4. Visual mode QR @ 203dpi and DataMatrix @ 300dpi
-  const qrTpl = seed.labelTemplates.find((t) => t.templateId === 'TPL-CONSIGN-70X40')!;
-  const zplQr = generateZplFromTemplate({ template: qrTpl, reel, material: mat });
-  assert.match(zplQr, /\^BQN,2,/);
-  assert.match(zplQr, /\^PW559/);
 
   const dmTpl = seed.labelTemplates.find((t) => t.templateId === 'TPL-BOX-100X60')!;
   const zplDm = generateZplFromTemplate({ template: dmTpl, reel, material: mat });
@@ -1072,6 +1090,7 @@ test('zplEngine compiles 203/300dpi CODE128, QR, DataMatrix and custom ZPL templ
     zplMode: 'CUSTOM_ZPL',
     fontScale: 'STANDARD',
     barcodeHeightMm: 10,
+    elementLayouts: customLayouts,
     customZpl: '^XA\n^CI28\n^FO30,30^A0N,36,30^FD{{MPN}}^FS\n^FO30,90^BQN,2,5^FDQA,{{COMPOSITE}}^FS\n^XZ',
     headerTitle: '定制标',
     footerNote: '定制页脚',
@@ -1089,6 +1108,8 @@ test('zplEngine compiles 203/300dpi CODE128, QR, DataMatrix and custom ZPL templ
   });
   assert.equal(customTpl.dpi, 300);
   assert.equal(customTpl.zplMode, 'CUSTOM_ZPL');
+  assert.equal(customTpl.elementLayouts?.find((l) => l.key === 'barcode')?.xMm, 40);
+
   const compiledCustom = generateZplFromTemplate({
     template: customTpl,
     reel,
@@ -1098,7 +1119,7 @@ test('zplEngine compiles 203/300dpi CODE128, QR, DataMatrix and custom ZPL templ
   assert.match(compiledCustom, new RegExp(`\\^FD${reel.mpn}\\^FS`));
   assert.match(compiledCustom, /\^PQ4,0,1,Y/);
 
-  // 6. 2D preview matrix generation & Zebra printerConfig persistence + legacy normalization
+  // 6. 2D preview matrix & Zebra printerConfig persistence + legacy normalization
   const qrMat = generatePseudo2dMatrix(reel.reelId, 'QR', 21);
   assert.equal(qrMat.length, 21);
   assert.equal(qrMat[0][0], true);
@@ -1115,7 +1136,6 @@ test('zplEngine compiles 203/300dpi CODE128, QR, DataMatrix and custom ZPL templ
   assert.equal(printerConfig.host, '192.168.50.120');
   assert.equal(printerConfig.darkness, 22);
 
-  // Legacy store missing printerConfig & ZPL fields normalizes cleanly
   const normalized = normalizeWmsState(
     {
       ...s2,
@@ -1146,7 +1166,160 @@ test('zplEngine compiles 203/300dpi CODE128, QR, DataMatrix and custom ZPL templ
   assert.equal(normalized.printerConfig?.port, 9100);
   assert.equal(normalized.labelTemplates[0].dpi, 203);
   assert.equal(normalized.labelTemplates[0].barcodeType, 'CODE128');
+  assert.equal((normalized.labelTemplates[0].elementLayouts?.length ?? 0) >= 8, true);
 });
+
+test('zplEngine supports custom paper dimensions, 600/custom DPI, global X/Y shift, multi-barcodes, styled HRI text, and custom TEXT/BOX elements', () => {
+  const seed = createSeedData();
+  const reel = seed.reels[0];
+  const mat = seed.materials.find((m) => m.skuCode === reel.skuCode);
+
+  // 1. Global shift commands (^LH for positive, ^LS / ^LT for negative)
+  const shiftMixed = buildGlobalShiftZplLines(3.5, -2.0, 203);
+  assert.equal(shiftMixed.shiftXDots, Math.round((3.5 * 203) / 25.4)); // 28
+  assert.equal(shiftMixed.shiftYDots, Math.round((-2.0 * 203) / 25.4)); // -16
+  assert.equal(shiftMixed.lines.includes('^LH28,0'), true);
+  assert.equal(shiftMixed.lines.includes('^LT-16'), true);
+
+  const shiftNegX = buildGlobalShiftZplLines(-2.5, 1.5, 300);
+  assert.equal(shiftNegX.lines.includes('^LH0,18'), true);
+  assert.equal(shiftNegX.lines.includes('^LS-30'), true);
+
+  // 2. Custom paper 85x45mm @ 600dpi + custom barcode (CODE39 + TOP inverted bold HRI) + custom TEXT + custom BOX
+  const baseLayouts = buildDefaultElementLayouts('CUSTOM', undefined, 'STANDARD', 9, 85, 45);
+  const layoutsWithCustom = [
+    ...baseLayouts,
+    {
+      key: 'CUSTOM_BC_1',
+      kind: 'BARCODE' as const,
+      label: 'MPN 物料条码',
+      visible: true,
+      xMm: 45,
+      yMm: 14,
+      fontSizeMm: 8,
+      widthMm: 35,
+      rotation: 'N' as const,
+      barcodeType: 'CODE39' as const,
+      barcodeContent: '{{MPN}}',
+      moduleWidthDots: 3,
+      hriPosition: 'TOP' as const,
+      hriTextTemplate: 'P/N:{{MPN}}',
+      hriFontSizeMm: 2.5,
+      hriFontFamily: 'D' as const,
+      hriBold: true,
+      hriInvert: true,
+      hriAlign: 'CENTER' as const,
+      hriOffsetXMm: 0,
+      hriOffsetYMm: -0.5,
+    },
+    {
+      key: 'CUSTOM_TXT_1',
+      kind: 'TEXT' as const,
+      label: 'RoHS 标识',
+      visible: true,
+      xMm: 4,
+      yMm: 38,
+      fontSizeMm: 2.6,
+      widthMm: 40,
+      rotation: 'N' as const,
+      contentTemplate: 'ROHS PASS · {{CUSTOMER}}',
+      fontFamily: 'B' as const,
+      bold: true,
+      invert: true,
+      textAlign: 'LEFT' as const,
+    },
+    {
+      key: 'CUSTOM_BOX_1',
+      kind: 'BOX' as const,
+      label: '警示外框',
+      visible: true,
+      xMm: 2,
+      yMm: 36,
+      fontSizeMm: 6,
+      widthMm: 80,
+      borderThicknessMm: 0.5,
+      rotation: 'N' as const,
+    },
+  ];
+
+  // Verify HRI box calculation positions TOP above barcode Y=14
+  const vars = buildZplVariables(reel, mat);
+  const hriBox = computeBarcodeHriBoxMm(layoutsWithCustom[layoutsWithCustom.length - 3], 'CODE39', vars, 85, 45);
+  assert.equal(hriBox.visible, true);
+  assert.equal(hriBox.yMm < 14, true);
+  assert.equal(hriBox.text, `P/N:${reel.mpn}`);
+  assert.equal(hriBox.invert, true);
+
+  // Persist through saveLabelTemplate and verify custom fields survive intact
+  const { state: sSaved, template: savedTpl } = saveLabelTemplate(seed, {
+    templateName: '85x45 产线双码高精标',
+    paperSize: 'CUSTOM',
+    customWidthMm: 85,
+    customHeightMm: 45,
+    dpi: 600,
+    offsetXMm: 2.0,
+    offsetYMm: -1.0,
+    barcodeType: 'CODE128',
+    zplMode: 'VISUAL',
+    fontScale: 'STANDARD',
+    barcodeHeightMm: 9,
+    elementOrder: layoutsWithCustom.map((l) => l.key),
+    elementLayouts: layoutsWithCustom,
+    headerTitle: '产线双码标',
+    footerNote: '严格校验',
+    showFields: {
+      mpn: true,
+      skuCode: true,
+      ownership: true,
+      packagingMpq: true,
+      supplier: true,
+      lotDateCode: true,
+      binMsd: true,
+      compositeBarcode: true,
+    },
+    isDefault: false,
+  });
+
+  assert.equal(savedTpl.paperSize, 'CUSTOM');
+  assert.equal(savedTpl.customWidthMm, 85);
+  assert.equal(savedTpl.customHeightMm, 45);
+  assert.equal(savedTpl.dpi, 600);
+  assert.equal(savedTpl.offsetXMm, 2);
+  assert.equal(savedTpl.offsetYMm, -1);
+  assert.equal(savedTpl.elementLayouts?.some((l) => l.key === 'CUSTOM_BC_1'), true);
+  assert.equal(savedTpl.elementLayouts?.some((l) => l.key === 'CUSTOM_TXT_1'), true);
+  assert.equal(savedTpl.elementLayouts?.some((l) => l.key === 'CUSTOM_BOX_1'), true);
+
+  const zpl = generateZplFromTemplate({
+    template: savedTpl,
+    reel,
+    material: mat,
+    copies: 2,
+  });
+  // 85mm @ 600dpi = 2008 dots, 45mm @ 600dpi = 1063 dots
+  assert.match(zpl, /\^PW2008/);
+  assert.match(zpl, /\^LL1063/);
+  // +2mm @ 600dpi = 47 dots; -1mm @ 600dpi = -24 dots
+  assert.match(zpl, /\^LH47,0/);
+  assert.match(zpl, /\^LT-24/);
+  // Main barcode uses explicit HRI (so ^BC uses N,N,N) + custom CODE39 barcode (^B3N,N,...,N,N)
+  assert.match(zpl, /\^BCN,\d+,N,N,N\^FD/);
+  assert.match(zpl, /\^B3N,N,\d+,N,N\^FD/);
+  // Custom HRI text with ^AD font, ^FR invert, and P/N:{{MPN}}
+  assert.match(zpl, new RegExp(`\\^FR\\^ADN,\\d+,\\d+\\^FB\\d+,1,0,C\\^FDP/N:${reel.mpn}\\^FS`));
+  // Custom TEXT element with ^AB font, ^FR invert, interpolated customer
+  assert.match(zpl, /\^FR\^ABN,\d+,\d+\^FDROHS PASS · 通用共享\^FS/);
+  // Custom BOX element ^GB
+  assert.match(zpl, /\^GB\d+,\d+,\d+\^FS/);
+
+  // Re-normalize preserves custom DPI (600) and custom elements
+  const reNorm = normalizeWmsState(sSaved, seed);
+  const reTpl = reNorm.labelTemplates.find((t) => t.templateId === savedTpl.templateId)!;
+  assert.equal(reTpl.dpi, 600);
+  assert.equal(reTpl.customWidthMm, 85);
+  assert.equal(reTpl.elementLayouts?.some((l) => l.key === 'CUSTOM_BC_1'), true);
+});
+
 
 
 

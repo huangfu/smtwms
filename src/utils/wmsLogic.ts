@@ -24,7 +24,12 @@ import type {
   WorkOrder,
   ZebraPrinterConfig,
 } from '../types/wms';
-import { DEFAULT_ELEMENT_ORDER, normalizeElementOrder } from './zplEngine';
+import {
+  DEFAULT_ELEMENT_ORDER,
+  normalizeDpi,
+  normalizeElementLayouts,
+  normalizeElementOrder,
+} from './zplEngine';
 
 export function buildMaterialKey(
   skuCode: string,
@@ -178,15 +183,36 @@ export function normalizeWmsState(
       : fallbackSeed.labelTemplates;
   const labelTemplates: LabelTemplate[] = rawTemplates.map((t) => {
     const seedTpl = seedTplById.get(t.templateId);
-    return {
+    const merged: LabelTemplate = {
       ...t,
-      dpi: t.dpi === 300 ? 300 : seedTpl?.dpi ?? 203,
+      customWidthMm:
+        typeof t.customWidthMm === 'number' && Number.isFinite(t.customWidthMm)
+          ? Math.max(20, Math.min(200, t.customWidthMm))
+          : seedTpl?.customWidthMm,
+      customHeightMm:
+        typeof t.customHeightMm === 'number' && Number.isFinite(t.customHeightMm)
+          ? Math.max(10, Math.min(200, t.customHeightMm))
+          : seedTpl?.customHeightMm,
+      dpi: normalizeDpi(t.dpi ?? seedTpl?.dpi ?? 203),
+      offsetXMm:
+        typeof t.offsetXMm === 'number' && Number.isFinite(t.offsetXMm)
+          ? Math.max(-30, Math.min(30, t.offsetXMm))
+          : seedTpl?.offsetXMm ?? 0,
+      offsetYMm:
+        typeof t.offsetYMm === 'number' && Number.isFinite(t.offsetYMm)
+          ? Math.max(-30, Math.min(30, t.offsetYMm))
+          : seedTpl?.offsetYMm ?? 0,
       barcodeType: t.barcodeType ?? seedTpl?.barcodeType ?? 'CODE128',
       zplMode: t.zplMode ?? seedTpl?.zplMode ?? 'VISUAL',
       fontScale: t.fontScale ?? seedTpl?.fontScale ?? 'STANDARD',
       barcodeHeightMm: t.barcodeHeightMm ?? seedTpl?.barcodeHeightMm ?? 8,
       elementOrder: normalizeElementOrder(t.elementOrder ?? seedTpl?.elementOrder ?? DEFAULT_ELEMENT_ORDER),
+      elementLayouts: t.elementLayouts ?? seedTpl?.elementLayouts,
       customZpl: t.customZpl ?? seedTpl?.customZpl ?? '',
+    };
+    return {
+      ...merged,
+      elementLayouts: normalizeElementLayouts(merged),
     };
   });
 
@@ -2911,19 +2937,50 @@ export function saveLabelTemplate(
 
   const barcodeHeightMm =
     typeof input.barcodeHeightMm === 'number' && Number.isFinite(input.barcodeHeightMm)
-      ? Math.max(4, Math.min(24, Math.round(input.barcodeHeightMm)))
+      ? Math.max(4, Math.min(36, Math.round(input.barcodeHeightMm * 10) / 10))
       : 8;
+
+  const customWidthMm =
+    typeof input.customWidthMm === 'number' && Number.isFinite(input.customWidthMm)
+      ? Math.max(20, Math.min(200, Math.round(input.customWidthMm * 10) / 10))
+      : undefined;
+  const customHeightMm =
+    typeof input.customHeightMm === 'number' && Number.isFinite(input.customHeightMm)
+      ? Math.max(10, Math.min(200, Math.round(input.customHeightMm * 10) / 10))
+      : undefined;
+  const offsetXMm =
+    typeof input.offsetXMm === 'number' && Number.isFinite(input.offsetXMm)
+      ? Math.max(-30, Math.min(30, Math.round(input.offsetXMm * 10) / 10))
+      : 0;
+  const offsetYMm =
+    typeof input.offsetYMm === 'number' && Number.isFinite(input.offsetYMm)
+      ? Math.max(-30, Math.min(30, Math.round(input.offsetYMm * 10) / 10))
+      : 0;
 
   const template: LabelTemplate = {
     ...input,
     templateId,
     templateName,
-    dpi: input.dpi === 300 ? 300 : 203,
+    customWidthMm,
+    customHeightMm,
+    dpi: normalizeDpi(input.dpi),
+    offsetXMm,
+    offsetYMm,
     barcodeType: input.barcodeType ?? 'CODE128',
     zplMode: input.zplMode ?? 'VISUAL',
     fontScale: input.fontScale ?? 'STANDARD',
     barcodeHeightMm,
     elementOrder: normalizeElementOrder(input.elementOrder),
+    elementLayouts: normalizeElementLayouts({
+      paperSize: input.paperSize,
+      customWidthMm,
+      customHeightMm,
+      elementLayouts: input.elementLayouts,
+      elementOrder: input.elementOrder,
+      showFields: input.showFields,
+      fontScale: input.fontScale,
+      barcodeHeightMm,
+    }),
     customZpl: input.customZpl ?? '',
     headerTitle: input.headerTitle.trim() || 'SMT 料盘唯一标识',
     footerNote: input.footerNote.trim() || 'IPC-1782 全程追溯',

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AuthGate } from './components/AuthGate';
 import { BarcodeLabelModal } from './components/BarcodeLabelModal';
 import { BomMasterView } from './components/BomMasterView';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { DashboardView } from './components/DashboardView';
 import { InboundView } from './components/InboundView';
 import { InventoryMasterView } from './components/InventoryMasterView';
@@ -10,20 +12,25 @@ import { Sidebar, type NavKey } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { TraceabilityView } from './components/TraceabilityView';
 import { WavePickView } from './components/WavePickView';
+import { useAuth } from './context/AuthContext';
 import { wmsApi } from './services/wmsApi';
 import type { AsnOrder, ReelItem, WmsState } from './types/wms';
 
 export default function App() {
+  const { user, loading: authLoading, changePassword, signOut } = useAuth();
   const [state, setState] = useState<WmsState | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeNav, setActiveNav] = useState<NavKey>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [traceQuery, setTraceQuery] = useState('');
   const [inboundPrefillSku, setInboundPrefillSku] = useState<string | undefined>(undefined);
   const [labelReel, setLabelReel] = useState<ReelItem | null>(null);
+  const [changePwdOpen, setChangePwdOpen] = useState(false);
 
   const fetchState = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
     try {
       setLoadError(null);
       const res = await wmsApi.getState();
@@ -33,11 +40,18 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
+    if (!user) {
+      setState(null);
+      setLoadError(null);
+      setLoading(false);
+      setChangePwdOpen(false);
+      return;
+    }
     fetchState();
-  }, [fetchState]);
+  }, [user, fetchState]);
 
   const handleInspectTrace = (query: string) => {
     setTraceQuery(query);
@@ -52,7 +66,7 @@ export default function App() {
   const handleBakeMsd = async (reelId: string) => {
     const res = await wmsApi.bakeMsdReel({
       reelId,
-      operator: 'IQC烘烤专员',
+      operator: user?.displayName || 'IQC烘烤专员',
     });
     setState(res.state);
   };
@@ -62,7 +76,19 @@ export default function App() {
     setState(res.state);
   };
 
-  if (loading) {
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="text-sm font-medium text-slate-600">正在初始化工作台...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthGate />;
+  }
+
+  if (loading && !state) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-sm font-medium text-slate-600">正在加载 SMT-WMS 仓储数据...</div>
@@ -74,13 +100,22 @@ export default function App() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 p-4">
         <div className="text-sm font-semibold text-red-700">{loadError || '数据加载异常'}</div>
-        <button
-          type="button"
-          onClick={fetchState}
-          className="rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
-        >
-          重试连接
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={fetchState}
+            className="rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
+          >
+            重试连接
+          </button>
+          <button
+            type="button"
+            onClick={signOut}
+            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            切换账号
+          </button>
+        </div>
       </div>
     );
   }
@@ -105,6 +140,12 @@ export default function App() {
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           onQuickScan={handleInspectTrace}
           onQuickInbound={() => setActiveNav('inbound')}
+          userName={user.displayName || user.username}
+          userEmail={user.username ? `@${user.username}` : user.email}
+          onOpenChangePassword={
+            user.authProvider === 'password' ? () => setChangePwdOpen(true) : undefined
+          }
+          onSignOut={signOut}
         />
 
         <main className="flex-1 p-4 lg:p-6">
@@ -361,6 +402,15 @@ export default function App() {
         }}
         onClose={() => setLabelReel(null)}
       />
+
+      {user.authProvider === 'password' && (
+        <ChangePasswordModal
+          open={changePwdOpen}
+          username={user.username || user.displayName || ''}
+          onSubmit={changePassword}
+          onClose={() => setChangePwdOpen(false)}
+        />
+      )}
     </div>
   );
 }

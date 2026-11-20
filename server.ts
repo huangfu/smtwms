@@ -1,10 +1,31 @@
+import 'dotenv/config';
 import express from 'express';
-import fs from 'fs';
 import net from 'node:net';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { createSeedData } from './src/data/seedData';
-import type { WmsState } from './src/types/wms';
+import {
+  AuthValidationError,
+  authenticateLocalUser,
+  changeLocalUserPassword,
+  registerLocalUser,
+  revokeUserSession,
+  verifyUserSession,
+} from './src/db/users.ts';
+import {
+  BusinessRuleError,
+  loadUserWmsState,
+  mutateUserWmsState,
+  resetUserWmsState,
+} from './src/db/wmsRepository.ts';
+import {
+  clearSessionCookie,
+  extractAuthToken,
+  requireAuth,
+  setSessionCookie,
+  type AuthRequest,
+} from './src/middleware/auth.ts';
+import { isLocalSessionToken } from './src/utils/passwordAuth.ts';
+import type { WmsState } from './src/types/wms.ts';
 import {
   addCustomer,
   addMaterialSku,
@@ -37,7 +58,6 @@ import {
   deleteWarehouseKeeper,
   importAsnFromCsv,
   issueWaveAllocation,
-  normalizeWmsState,
   saveBarcodeRule,
   saveBomMaster,
   saveLabelTemplate,
@@ -49,7 +69,7 @@ import {
   updateWarehouse,
   updateWarehouseBin,
   updateWarehouseKeeper,
-} from './src/utils/wmsLogic';
+} from './src/utils/wmsLogic.ts';
 
 function formatTcpPrintError(host: string, port: number, err: unknown): string {
   const code = (err as NodeJS.ErrnoException)?.code;
@@ -140,79 +160,178 @@ function sendZebraTcpZpl(
   });
 }
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
-const STORE_PATH = path.join(DATA_DIR, 'wms-store.json');
-
-function loadState(): WmsState {
-  const seed = createSeedData();
-  try {
-    if (fs.existsSync(STORE_PATH)) {
-      const raw = fs.readFileSync(STORE_PATH, 'utf-8');
-      const parsed = JSON.parse(raw) as Partial<WmsState>;
-      if (parsed && Array.isArray(parsed.reels) && Array.isArray(parsed.materials)) {
-        const normalized = normalizeWmsState(parsed, seed);
-        return normalized;
-      }
-    }
-  } catch (err) {
-    console.error('Failed to read wms-store.json, resetting to seed:', err);
-  }
-  saveState(seed);
-  return seed;
-}
-
-function saveState(state: WmsState): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(state, null, 2), 'utf-8');
-}
-
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '2mb' }));
 
-  let state = loadState();
-
-  const handleMutation = (
+  const handleMutation = async (
+    req: AuthRequest,
     res: express.Response,
     fn: (current: WmsState) => { state: WmsState; payload?: unknown }
   ) => {
+    const ownerUid = req.user?.uid;
+    if (!ownerUid) {
+      res.status(401).json({ ok: false, error: '未登录，请重新登录。' });
+      return;
+    }
+
     try {
-      const result = fn(state);
-      state = result.state;
-      saveState(state);
-      res.json({ ok: true, state, payload: result.payload ?? null });
+      const result = await mutateUserWmsState(ownerUid, fn);
+      res.json({ ok: true, state: result.state, payload: result.payload ?? null });
     } catch (err) {
-      const message = err instanceof Error ? err.message : '操作失败';
-      res.status(400).json({ ok: false, error: message });
+      if (err instanceof BusinessRuleError) {
+        res.status(400).json({ ok: false, error: err.message });
+        return;
+      }
+      console.error('WMS mutation error:', err);
+      const message = err instanceof Error ? err.message : '操作失败，请稍后重试。';
+      res.status(500).json({ ok: false, error: message });
     }
   };
 
-  app.get('/api/wms/state', (_req, res) => {
-    res.json({ ok: true, state });
+  // Custom username/password authentication routes
+  app.post('/api/auth/register', async (req, res) => {
+    try {
+      const result = await registerLocalUser({
+        username: String(req.body?.username ?? ''),
+        password: String(req.body?.password ?? ''),
+        displayName:
+          typeof req.body?.displayName === 'string' ? req.body.displayName : undefined,
+      });
+      setSessionCookie(req, res, result.token);
+      res.status(201).json({ ok: true, user: result.user, token: result.token });
+    } catch (err) {
+      if (err instanceof AuthValidationError) {
+        res.status(err.statusCode).json({ ok: false, error: err.message });
+        return;
+      }
+      console.error('Register error:', err);
+      res.status(500).json({ ok: false, error: '账号注册失败，请稍后重试。' });
+    }
   });
 
-  app.post('/api/wms/reset', (_req, res) => {
-    state = createSeedData();
-    saveState(state);
-    res.json({ ok: true, state });
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const result = await authenticateLocalUser({
+        username: String(req.body?.username ?? ''),
+        password: String(req.body?.password ?? ''),
+      });
+      setSessionCookie(req, res, result.token);
+      res.json({ ok: true, user: result.user, token: result.token });
+    } catch (err) {
+      if (err instanceof AuthValidationError) {
+        res.status(err.statusCode).json({ ok: false, error: err.message });
+        return;
+      }
+      console.error('Login error:', err);
+      res.status(500).json({ ok: false, error: '登录失败，请稍后重试。' });
+    }
   });
 
-  app.post('/api/wms/inbound', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/auth/logout', async (req, res) => {
+    const token = extractAuthToken(req);
+    if (token && isLocalSessionToken(token)) {
+      await revokeUserSession(token);
+    }
+    clearSessionCookie(req, res);
+    res.json({ ok: true });
+  });
+
+  app.get('/api/auth/me', requireAuth, (req: AuthRequest, res) => {
+    if (!req.user) {
+      res.status(401).json({ ok: false, error: '未登录' });
+      return;
+    }
+    res.json({
+      ok: true,
+      user: {
+        uid: req.user.uid,
+        username: req.user.username ?? null,
+        email: req.user.email,
+        displayName: req.user.name ?? req.user.username ?? req.user.email,
+        authProvider: req.user.authProvider,
+      },
+    });
+  });
+
+  app.post('/api/auth/change-password', requireAuth, async (req: AuthRequest, res) => {
+    const uid = req.user?.uid;
+    if (!uid) {
+      res.status(401).json({ ok: false, error: '未登录，请重新登录。' });
+      return;
+    }
+    try {
+      await changeLocalUserPassword({
+        uid,
+        currentPassword: String(req.body?.currentPassword ?? ''),
+        newPassword: String(req.body?.newPassword ?? ''),
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      if (err instanceof AuthValidationError) {
+        res.status(err.statusCode).json({ ok: false, error: err.message });
+        return;
+      }
+      console.error('Change password error:', err);
+      res.status(500).json({ ok: false, error: '修改密码失败，请稍后重试。' });
+    }
+  });
+
+  // All WMS API endpoints require a verified Firebase Auth ID token or custom session token
+  app.use('/api/wms', requireAuth);
+
+  app.get('/api/wms/state', async (req: AuthRequest, res) => {
+    const ownerUid = req.user?.uid;
+    if (!ownerUid) {
+      res.status(401).json({ ok: false, error: '未登录，请重新登录。' });
+      return;
+    }
+    try {
+      const state = await loadUserWmsState(ownerUid);
+      res.json({ ok: true, state });
+    } catch (err) {
+      console.error('Failed to load WMS state:', err);
+      res.status(500).json({
+        ok: false,
+        error: err instanceof Error ? err.message : '仓储数据加载失败，请稍后重试。',
+      });
+    }
+  });
+
+  app.post('/api/wms/reset', async (req: AuthRequest, res) => {
+    const ownerUid = req.user?.uid;
+    if (!ownerUid) {
+      res.status(401).json({ ok: false, error: '未登录，请重新登录。' });
+      return;
+    }
+    try {
+      const state = await resetUserWmsState(ownerUid);
+      res.json({ ok: true, state });
+    } catch (err) {
+      console.error('Failed to reset WMS state:', err);
+      res.status(500).json({
+        ok: false,
+        error: err instanceof Error ? err.message : '重置数据失败，请稍后重试。',
+      });
+    }
+  });
+
+  app.post('/api/wms/inbound', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = applyInbound(cur, req.body);
       return { state: result.state, payload: { reel: result.reel, event: result.event } };
     });
   });
 
-  app.post('/api/wms/outbound', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/outbound', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = applyGeneralOutbound(cur, req.body);
       return { state: result.state, payload: { reel: result.reel, event: result.event } };
     });
   });
 
-  app.post('/api/wms/waves', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/waves', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = createWaveOrder(cur, req.body);
       return {
         state: result.state,
@@ -221,8 +340,8 @@ async function startServer() {
     });
   });
 
-  app.post('/api/wms/waves/:waveId/issue', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/waves/:waveId/issue', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = issueWaveAllocation(cur, {
         waveId: req.params.waveId,
         reelId: req.body.reelId,
@@ -232,43 +351,43 @@ async function startServer() {
     });
   });
 
-  app.post('/api/wms/replenish', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/replenish', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = applyReplenishment(cur, req.body);
       return { state: result.state, payload: { reel: result.reel, event: result.event } };
     });
   });
 
-  app.post('/api/wms/return', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/return', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = applyProductionReturn(cur, req.body);
       return { state: result.state, payload: { reel: result.reel, event: result.event } };
     });
   });
 
-  app.post('/api/wms/msd-bake', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/msd-bake', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = bakeMsdReel(cur, req.body);
       return { state: result.state, payload: { reel: result.reel, event: result.event } };
     });
   });
 
-  app.post('/api/wms/scrap', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/scrap', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = applyScrap(cur, req.body);
       return { state: result.state, payload: { scrap: result.scrap, event: result.event } };
     });
   });
 
-  app.post('/api/wms/cycle-counts', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/cycle-counts', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = createCycleCountTask(cur, req.body);
       return { state: result.state, payload: { task: result.task } };
     });
   });
 
-  app.post('/api/wms/cycle-counts/:countId/reconcile', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/cycle-counts/:countId/reconcile', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = applyCycleCountReconcile(cur, {
         countId: req.params.countId,
         counts: req.body.counts,
@@ -278,226 +397,226 @@ async function startServer() {
     });
   });
 
-  app.post('/api/wms/materials', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/materials', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = addMaterialSku(cur, req.body);
       return { state: result.state, payload: { material: result.material } };
     });
   });
 
-  app.put('/api/wms/materials', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.put('/api/wms/materials', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = updateMaterialSku(cur, req.body.originalKey, req.body.material);
       return { state: result.state, payload: { material: result.material } };
     });
   });
 
-  app.delete('/api/wms/materials', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.delete('/api/wms/materials', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const key = String(req.body?.materialKey || req.query.materialKey || '');
       const result = deleteMaterialSku(cur, key);
       return { state: result.state };
     });
   });
 
-  app.post('/api/wms/work-orders', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/work-orders', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = addWorkOrder(cur, req.body);
       return { state: result.state, payload: { workOrder: result.workOrder } };
     });
   });
 
-  app.post('/api/wms/warehouses', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/warehouses', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = addWarehouse(cur, req.body);
       return { state: result.state, payload: { warehouse: result.warehouse } };
     });
   });
 
-  app.put('/api/wms/warehouses/:code', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.put('/api/wms/warehouses/:code', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = updateWarehouse(cur, req.params.code, req.body);
       return { state: result.state, payload: { warehouse: result.warehouse } };
     });
   });
 
-  app.delete('/api/wms/warehouses/:code', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.delete('/api/wms/warehouses/:code', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = deleteWarehouse(cur, req.params.code);
       return { state: result.state };
     });
   });
 
-  app.post('/api/wms/bins', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/bins', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = addWarehouseBin(cur, req.body);
       return { state: result.state, payload: { bin: result.bin } };
     });
   });
 
-  app.put('/api/wms/bins/:binCode', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.put('/api/wms/bins/:binCode', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = updateWarehouseBin(cur, req.params.binCode, req.body);
       return { state: result.state, payload: { bin: result.bin } };
     });
   });
 
-  app.delete('/api/wms/bins/:binCode', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.delete('/api/wms/bins/:binCode', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = deleteWarehouseBin(cur, req.params.binCode);
       return { state: result.state };
     });
   });
 
-  app.post('/api/wms/keepers', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/keepers', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = addWarehouseKeeper(cur, req.body);
       return { state: result.state, payload: { keeper: result.keeper } };
     });
   });
 
-  app.put('/api/wms/keepers/:keeperId', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.put('/api/wms/keepers/:keeperId', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = updateWarehouseKeeper(cur, req.params.keeperId, req.body);
       return { state: result.state, payload: { keeper: result.keeper } };
     });
   });
 
-  app.delete('/api/wms/keepers/:keeperId', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.delete('/api/wms/keepers/:keeperId', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = deleteWarehouseKeeper(cur, req.params.keeperId);
       return { state: result.state };
     });
   });
 
-  app.post('/api/wms/suppliers', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/suppliers', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = addSupplier(cur, req.body);
       return { state: result.state, payload: { supplier: result.supplier } };
     });
   });
 
-  app.put('/api/wms/suppliers/:code', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.put('/api/wms/suppliers/:code', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = updateSupplier(cur, req.params.code, req.body);
       return { state: result.state, payload: { supplier: result.supplier } };
     });
   });
 
-  app.delete('/api/wms/suppliers/:code', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.delete('/api/wms/suppliers/:code', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = deleteSupplier(cur, req.params.code);
       return { state: result.state };
     });
   });
 
-  app.post('/api/wms/customers', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/customers', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = addCustomer(cur, req.body);
       return { state: result.state, payload: { customer: result.customer } };
     });
   });
 
-  app.put('/api/wms/customers/:code', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.put('/api/wms/customers/:code', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = updateCustomer(cur, req.params.code, req.body);
       return { state: result.state, payload: { customer: result.customer } };
     });
   });
 
-  app.delete('/api/wms/customers/:code', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.delete('/api/wms/customers/:code', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = deleteCustomer(cur, req.params.code);
       return { state: result.state };
     });
   });
 
-  app.post('/api/wms/boms', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/boms', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = saveBomMaster(cur, req.body);
       return { state: result.state, payload: { bom: result.bom } };
     });
   });
 
-  app.delete('/api/wms/boms/:bomId', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.delete('/api/wms/boms/:bomId', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = deleteBomMaster(cur, req.params.bomId);
       return { state: result.state };
     });
   });
 
-  app.post('/api/wms/packaging-specs', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/packaging-specs', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = addPackagingSpec(cur, req.body);
       return { state: result.state, payload: { spec: result.spec } };
     });
   });
 
-  app.put('/api/wms/packaging-specs/:code', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.put('/api/wms/packaging-specs/:code', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = updatePackagingSpec(cur, req.params.code, req.body);
       return { state: result.state, payload: { spec: result.spec } };
     });
   });
 
-  app.delete('/api/wms/packaging-specs/:code', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.delete('/api/wms/packaging-specs/:code', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = deletePackagingSpec(cur, req.params.code);
       return { state: result.state };
     });
   });
 
-  app.post('/api/wms/barcode-rules', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/barcode-rules', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = saveBarcodeRule(cur, req.body);
       return { state: result.state, payload: { rule: result.rule } };
     });
   });
 
-  app.delete('/api/wms/barcode-rules/:ruleId', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.delete('/api/wms/barcode-rules/:ruleId', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = deleteBarcodeRule(cur, req.params.ruleId);
       return { state: result.state };
     });
   });
 
-  app.post('/api/wms/label-templates', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/label-templates', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = saveLabelTemplate(cur, req.body);
       return { state: result.state, payload: { template: result.template } };
     });
   });
 
-  app.delete('/api/wms/label-templates/:templateId', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.delete('/api/wms/label-templates/:templateId', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = deleteLabelTemplate(cur, req.params.templateId);
       return { state: result.state };
     });
   });
 
-  app.post('/api/wms/asns', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/asns', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = createAsnOrder(cur, req.body);
       return { state: result.state, payload: { asn: result.asn } };
     });
   });
 
-  app.post('/api/wms/asns/import-csv', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/asns/import-csv', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = importAsnFromCsv(cur, req.body);
       return { state: result.state, payload: { asn: result.asn } };
     });
   });
 
-  app.post('/api/wms/asns/:asnNo/cancel', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.post('/api/wms/asns/:asnNo/cancel', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = cancelAsnOrder(cur, req.params.asnNo);
       return { state: result.state, payload: { asn: result.asn } };
     });
   });
 
-  app.put('/api/wms/printer-config', (req, res) => {
-    handleMutation(res, (cur) => {
+  app.put('/api/wms/printer-config', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
       const result = savePrinterConfig(cur, req.body);
       return { state: result.state, payload: { printerConfig: result.printerConfig } };
     });

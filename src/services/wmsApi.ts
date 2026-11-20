@@ -23,12 +23,36 @@ export interface ZebraBrowserPrintDevice {
   version?: number;
 }
 
+export interface AuthUserProfile {
+  uid: string;
+  username: string | null;
+  email: string;
+  displayName: string | null;
+  authProvider: 'google' | 'password';
+}
+
+let authTokenProvider: (() => Promise<string | null>) | null = null;
+
+export function setAuthTokenProvider(provider: () => Promise<string | null>) {
+  authTokenProvider = provider;
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = authTokenProvider ? await authTokenProvider() : null;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string> | undefined),
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     ...options,
+    headers,
   });
-  const json = await res.json();
+  const json = await res.json().catch(() => ({ ok: false, error: `请求失败 (${res.status})` }));
   if (!res.ok || !json.ok) {
     throw new Error(json.error || `请求失败 (${res.status})`);
   }
@@ -42,6 +66,31 @@ export interface ApiResponse<P = unknown> {
 }
 
 export const wmsApi = {
+  authRegister: (body: { username: string; password: string; displayName?: string }) =>
+    request<{ ok: true; user: AuthUserProfile; token: string }>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  authLogin: (body: { username: string; password: string }) =>
+    request<{ ok: true; user: AuthUserProfile; token: string }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  authLogout: () =>
+    request<{ ok: true }>('/api/auth/logout', {
+      method: 'POST',
+    }),
+
+  authMe: () => request<{ ok: true; user: AuthUserProfile | null }>('/api/auth/me'),
+
+  authChangePassword: (body: { currentPassword: string; newPassword: string }) =>
+    request<{ ok: true }>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   getState: () => request<ApiResponse>('/api/wms/state'),
 
   resetDemo: () =>

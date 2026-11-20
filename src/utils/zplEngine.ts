@@ -1,8 +1,15 @@
 import type {
+  BarcodeHriPosition,
   LabelBarcodeType,
   LabelElementKey,
+  LabelElementKind,
+  LabelElementLayout,
+  LabelElementRotation,
+  LabelFontFamily,
   LabelFontScale,
+  LabelPaperPreset,
   LabelTemplate,
+  LabelTextAlign,
   MaterialSku,
   ReelItem,
 } from '../types/wms';
@@ -20,6 +27,8 @@ export const DEFAULT_ELEMENT_ORDER: LabelElementKey[] = [
   'footer',
 ];
 
+export const BUILTIN_KEY_SET = new Set<string>(DEFAULT_ELEMENT_ORDER);
+
 export const LABEL_ELEMENT_META: Record<
   LabelElementKey,
   { label: string; desc: string; toggleField?: keyof LabelTemplate['showFields'] }
@@ -30,7 +39,7 @@ export const LABEL_ELEMENT_META: Record<
   ownership: { label: '产权与客户准入', desc: '自购 / 客供 / VMI 隔离标记', toggleField: 'ownership' },
   packagingMpq: { label: '包装规格与 MPQ', desc: '卷盘/托盘与最小包装数量', toggleField: 'packagingMpq' },
   supplier: { label: '供应商名称', desc: '来料供应商信息', toggleField: 'supplier' },
-  barcode: { label: '主条码 / 二维码', desc: 'Code128 一维码或 QR / DataMatrix' },
+  barcode: { label: '主条码 / 二维码', desc: 'Code128 / Code39 / QR / DataMatrix 及 HRI 文字' },
   composite: { label: 'IPC-1782 复合串', desc: 'UID|P|L|D|Q 明文校验串', toggleField: 'compositeBarcode' },
   footer: { label: '页脚防错提示语', desc: '底部 FIFO / 管控提示' },
 };
@@ -57,22 +66,60 @@ export const ZPL_PLACEHOLDERS: { token: string; desc: string }[] = [
   { token: '{{COPIES}}', desc: '打印份数' },
 ];
 
+export const DPI_PRESETS = [203, 300, 600] as const;
+
+export function normalizeDpi(dpi?: number): number {
+  if (typeof dpi !== 'number' || !Number.isFinite(dpi)) return 203;
+  return Math.max(150, Math.min(600, Math.round(dpi)));
+}
+
 export function getPaperDimensionsMm(
-  paperSize: LabelTemplate['paperSize']
+  paperSize: LabelPaperPreset,
+  customWidthMm?: number,
+  customHeightMm?: number
 ): { widthMm: number; heightMm: number } {
   switch (paperSize) {
     case '50x30mm':
       return { widthMm: 50, heightMm: 30 };
     case '100x60mm':
       return { widthMm: 100, heightMm: 60 };
+    case 'CUSTOM': {
+      const w =
+        typeof customWidthMm === 'number' && Number.isFinite(customWidthMm)
+          ? Math.max(20, Math.min(200, Math.round(customWidthMm * 10) / 10))
+          : 70;
+      const h =
+        typeof customHeightMm === 'number' && Number.isFinite(customHeightMm)
+          ? Math.max(10, Math.min(200, Math.round(customHeightMm * 10) / 10))
+          : 40;
+      return { widthMm: w, heightMm: h };
+    }
     case '70x40mm':
     default:
       return { widthMm: 70, heightMm: 40 };
   }
 }
 
-export function mmToDots(mm: number, dpi: 203 | 300 = 203): number {
-  return Math.round((mm * dpi) / 25.4);
+export function formatPaperSizeLabel(
+  template: Pick<LabelTemplate, 'paperSize' | 'customWidthMm' | 'customHeightMm'>
+): string {
+  const { widthMm, heightMm } = getPaperDimensionsMm(
+    template.paperSize,
+    template.customWidthMm,
+    template.customHeightMm
+  );
+  return `${widthMm}×${heightMm}mm`;
+}
+
+export function mmToDots(mm: number, dpi = 203): number {
+  const safeDpi = normalizeDpi(dpi);
+  return Math.max(0, Math.round((mm * safeDpi) / 25.4));
+}
+
+export function mmToSignedDots(mm: number, dpi = 203): number {
+  const safeDpi = normalizeDpi(dpi);
+  if (!Number.isFinite(mm)) return 0;
+  return Math.round((mm * safeDpi) / 25.4);
 }
 
 /**
@@ -86,12 +133,45 @@ export function sanitizeZplText(value: string | number | undefined | null): stri
     .trim();
 }
 
-export function normalizeElementOrder(order?: LabelElementKey[]): LabelElementKey[] {
-  const validSet = new Set<LabelElementKey>(DEFAULT_ELEMENT_ORDER);
-  const result: LabelElementKey[] = [];
+export function interpolateZplTemplate(
+  templateStr: string,
+  vars: Record<string, string>
+): string {
+  let out = templateStr;
+  for (const [k, v] of Object.entries(vars)) {
+    out = out.replaceAll(`{{${k}}}`, v);
+  }
+  return sanitizeZplText(out);
+}
+
+export function resolveElementKind(el: Pick<LabelElementLayout, 'key' | 'kind'>): LabelElementKind {
+  if (el.kind) return el.kind;
+  if (BUILTIN_KEY_SET.has(el.key)) return 'BUILTIN';
+  if (el.key.startsWith('CUSTOM_BC_')) return 'BARCODE';
+  if (el.key.startsWith('CUSTOM_BOX_')) return 'BOX';
+  return 'TEXT';
+}
+
+export function isBarcodeElement(el: Pick<LabelElementLayout, 'key' | 'kind'>): boolean {
+  return el.key === 'barcode' || resolveElementKind(el) === 'BARCODE';
+}
+
+export function getElementDisplayName(el: LabelElementLayout): string {
+  if (el.label?.trim()) return el.label.trim();
+  if (BUILTIN_KEY_SET.has(el.key)) {
+    return LABEL_ELEMENT_META[el.key as LabelElementKey].label;
+  }
+  const kind = resolveElementKind(el);
+  if (kind === 'BARCODE') return '自定义条码';
+  if (kind === 'BOX') return '线条 / 边框';
+  return '自定义文本';
+}
+
+export function normalizeElementOrder(order?: string[]): string[] {
+  const result: string[] = [];
   if (Array.isArray(order)) {
     for (const key of order) {
-      if (validSet.has(key) && !result.includes(key)) {
+      if (typeof key === 'string' && key.trim() && !result.includes(key)) {
         result.push(key);
       }
     }
@@ -102,6 +182,230 @@ export function normalizeElementOrder(order?: LabelElementKey[]): LabelElementKe
     }
   }
   return result;
+}
+
+export function buildDefaultElementLayouts(
+  paperSize: LabelPaperPreset,
+  showFields?: Partial<LabelTemplate['showFields']>,
+  fontScale: LabelFontScale = 'STANDARD',
+  barcodeHeightMm?: number,
+  customWidthMm?: number,
+  customHeightMm?: number
+): LabelElementLayout[] {
+  const fontFactor = fontScale === 'COMPACT' ? 0.88 : fontScale === 'LARGE' ? 1.15 : 1;
+  const roundMm = (v: number) => Math.round(v * 2) / 2;
+
+  const isVisible = (key: LabelElementKey): boolean => {
+    if (!showFields) return true;
+    if (key === 'ownership') return showFields.ownership ?? true;
+    if (key === 'packagingMpq') return showFields.packagingMpq ?? true;
+    if (key === 'supplier') return showFields.supplier ?? true;
+    if (key === 'lotDcBin') return (showFields.lotDateCode ?? true) || (showFields.binMsd ?? true);
+    if (key === 'composite') return showFields.compositeBarcode ?? true;
+    return true;
+  };
+
+  if (paperSize === '50x30mm') {
+    const bh = barcodeHeightMm ?? 6;
+    return [
+      { key: 'header', kind: 'BUILTIN', visible: isVisible('header'), xMm: 1.5, yMm: 1.0, fontSizeMm: roundMm(1.9 * fontFactor), widthMm: 47, rotation: 'N', fontFamily: '0', bold: true },
+      { key: 'mpnQty', kind: 'BUILTIN', visible: isVisible('mpnQty'), xMm: 1.5, yMm: 3.5, fontSizeMm: roundMm(2.6 * fontFactor), widthMm: 47, rotation: 'N', fontFamily: '0', bold: true },
+      { key: 'lotDcBin', kind: 'BUILTIN', visible: isVisible('lotDcBin'), xMm: 1.5, yMm: 8.5, fontSizeMm: roundMm(1.9 * fontFactor), widthMm: 47, rotation: 'N', fontFamily: '0' },
+      { key: 'ownership', kind: 'BUILTIN', visible: isVisible('ownership'), xMm: 1.5, yMm: 11.5, fontSizeMm: roundMm(1.7 * fontFactor), widthMm: 47, rotation: 'N', fontFamily: '0' },
+      { key: 'packagingMpq', kind: 'BUILTIN', visible: isVisible('packagingMpq'), xMm: 1.5, yMm: 14.0, fontSizeMm: roundMm(1.7 * fontFactor), widthMm: 47, rotation: 'N', fontFamily: '0' },
+      { key: 'supplier', kind: 'BUILTIN', visible: showFields?.supplier ?? false, xMm: 1.5, yMm: 16.0, fontSizeMm: roundMm(1.7 * fontFactor), widthMm: 47, rotation: 'N', fontFamily: '0' },
+      {
+        key: 'barcode',
+        kind: 'BUILTIN',
+        visible: true,
+        xMm: 2.0,
+        yMm: 16.5,
+        fontSizeMm: bh,
+        widthMm: 46,
+        rotation: 'N',
+        barcodeContent: '{{REEL_ID}}',
+        hriPosition: 'BOTTOM',
+        hriFontSizeMm: 1.8,
+        hriFontFamily: '0',
+        hriBold: true,
+        hriAlign: 'LEFT',
+        hriOffsetXMm: 0,
+        hriOffsetYMm: 0.4,
+      },
+      { key: 'composite', kind: 'BUILTIN', visible: isVisible('composite'), xMm: 1.5, yMm: 24.8, fontSizeMm: roundMm(1.5 * fontFactor), widthMm: 47, rotation: 'N', fontFamily: '0' },
+      { key: 'footer', kind: 'BUILTIN', visible: true, xMm: 1.5, yMm: 27.5, fontSizeMm: roundMm(1.5 * fontFactor), widthMm: 47, rotation: 'N', fontFamily: '0' },
+    ];
+  }
+
+  if (paperSize === '100x60mm') {
+    const bh = barcodeHeightMm ?? 12;
+    return [
+      { key: 'header', kind: 'BUILTIN', visible: isVisible('header'), xMm: 3.0, yMm: 2.0, fontSizeMm: roundMm(3.0 * fontFactor), widthMm: 94, rotation: 'N', fontFamily: '0', bold: true },
+      { key: 'mpnQty', kind: 'BUILTIN', visible: isVisible('mpnQty'), xMm: 3.0, yMm: 6.5, fontSizeMm: roundMm(4.2 * fontFactor), widthMm: 94, rotation: 'N', fontFamily: '0', bold: true },
+      { key: 'lotDcBin', kind: 'BUILTIN', visible: isVisible('lotDcBin'), xMm: 3.0, yMm: 15.5, fontSizeMm: roundMm(2.8 * fontFactor), widthMm: 94, rotation: 'N', fontFamily: '0' },
+      { key: 'ownership', kind: 'BUILTIN', visible: isVisible('ownership'), xMm: 3.0, yMm: 20.5, fontSizeMm: roundMm(2.5 * fontFactor), widthMm: 94, rotation: 'N', fontFamily: '0' },
+      { key: 'packagingMpq', kind: 'BUILTIN', visible: isVisible('packagingMpq'), xMm: 3.0, yMm: 24.5, fontSizeMm: roundMm(2.5 * fontFactor), widthMm: 94, rotation: 'N', fontFamily: '0' },
+      { key: 'supplier', kind: 'BUILTIN', visible: isVisible('supplier'), xMm: 3.0, yMm: 28.5, fontSizeMm: roundMm(2.5 * fontFactor), widthMm: 94, rotation: 'N', fontFamily: '0' },
+      {
+        key: 'barcode',
+        kind: 'BUILTIN',
+        visible: true,
+        xMm: 3.5,
+        yMm: 33.5,
+        fontSizeMm: bh,
+        widthMm: 93,
+        rotation: 'N',
+        barcodeContent: '{{REEL_ID}}',
+        hriPosition: 'BOTTOM',
+        hriFontSizeMm: 2.5,
+        hriFontFamily: '0',
+        hriBold: true,
+        hriAlign: 'LEFT',
+        hriOffsetXMm: 0,
+        hriOffsetYMm: 0.6,
+      },
+      { key: 'composite', kind: 'BUILTIN', visible: isVisible('composite'), xMm: 3.0, yMm: 49.5, fontSizeMm: roundMm(2.1 * fontFactor), widthMm: 94, rotation: 'N', fontFamily: '0' },
+      { key: 'footer', kind: 'BUILTIN', visible: true, xMm: 3.0, yMm: 55.0, fontSizeMm: roundMm(2.1 * fontFactor), widthMm: 94, rotation: 'N', fontFamily: '0' },
+    ];
+  }
+
+  // Proportional scaling for CUSTOM or standard 70x40mm
+  const { widthMm, heightMm } = getPaperDimensionsMm(paperSize, customWidthMm, customHeightMm);
+  const sx = widthMm / 70;
+  const sy = heightMm / 40;
+  const sf = Math.max(0.65, Math.min(1.6, Math.min(sx, sy)));
+  const marginX = roundMm(Math.max(1.5, 2.0 * sx));
+  const contentW = roundMm(Math.max(14, widthMm - marginX * 2));
+  const bh = barcodeHeightMm ?? roundMm(Math.max(5, Math.min(18, 9 * sy)));
+
+  return [
+    { key: 'header', kind: 'BUILTIN', visible: isVisible('header'), xMm: marginX, yMm: roundMm(1.5 * sy), fontSizeMm: roundMm(Math.max(1.4, 2.2 * sf * fontFactor)), widthMm: contentW, rotation: 'N', fontFamily: '0', bold: true },
+    { key: 'mpnQty', kind: 'BUILTIN', visible: isVisible('mpnQty'), xMm: marginX, yMm: roundMm(4.5 * sy), fontSizeMm: roundMm(Math.max(1.8, 3.2 * sf * fontFactor)), widthMm: contentW, rotation: 'N', fontFamily: '0', bold: true },
+    { key: 'lotDcBin', kind: 'BUILTIN', visible: isVisible('lotDcBin'), xMm: marginX, yMm: roundMm(10.5 * sy), fontSizeMm: roundMm(Math.max(1.4, 2.1 * sf * fontFactor)), widthMm: contentW, rotation: 'N', fontFamily: '0' },
+    { key: 'ownership', kind: 'BUILTIN', visible: isVisible('ownership'), xMm: marginX, yMm: roundMm(14.0 * sy), fontSizeMm: roundMm(Math.max(1.4, 1.9 * sf * fontFactor)), widthMm: contentW, rotation: 'N', fontFamily: '0' },
+    { key: 'packagingMpq', kind: 'BUILTIN', visible: isVisible('packagingMpq'), xMm: marginX, yMm: roundMm(17.0 * sy), fontSizeMm: roundMm(Math.max(1.4, 1.9 * sf * fontFactor)), widthMm: contentW, rotation: 'N', fontFamily: '0' },
+    { key: 'supplier', kind: 'BUILTIN', visible: isVisible('supplier'), xMm: marginX, yMm: roundMm(20.0 * sy), fontSizeMm: roundMm(Math.max(1.4, 1.9 * sf * fontFactor)), widthMm: contentW, rotation: 'N', fontFamily: '0' },
+    {
+      key: 'barcode',
+      kind: 'BUILTIN',
+      visible: true,
+      xMm: roundMm(marginX + 0.5),
+      yMm: roundMm(23.0 * sy),
+      fontSizeMm: bh,
+      widthMm: roundMm(Math.max(12, contentW - 1)),
+      rotation: 'N',
+      barcodeContent: '{{REEL_ID}}',
+      hriPosition: 'BOTTOM',
+      hriFontSizeMm: roundMm(Math.max(1.5, 2.0 * sf)),
+      hriFontFamily: '0',
+      hriBold: true,
+      hriAlign: 'LEFT',
+      hriOffsetXMm: 0,
+      hriOffsetYMm: 0.5,
+    },
+    { key: 'composite', kind: 'BUILTIN', visible: isVisible('composite'), xMm: marginX, yMm: roundMm(33.5 * sy), fontSizeMm: roundMm(Math.max(1.3, 1.7 * sf * fontFactor)), widthMm: contentW, rotation: 'N', fontFamily: '0' },
+    { key: 'footer', kind: 'BUILTIN', visible: true, xMm: marginX, yMm: roundMm(36.8 * sy), fontSizeMm: roundMm(Math.max(1.3, 1.7 * sf * fontFactor)), widthMm: contentW, rotation: 'N', fontFamily: '0' },
+  ];
+}
+
+export function normalizeElementLayouts(
+  template: Pick<
+    LabelTemplate,
+    | 'paperSize'
+    | 'customWidthMm'
+    | 'customHeightMm'
+    | 'elementLayouts'
+    | 'elementOrder'
+    | 'showFields'
+    | 'fontScale'
+    | 'barcodeHeightMm'
+  >
+): LabelElementLayout[] {
+  const defaults = buildDefaultElementLayouts(
+    template.paperSize,
+    template.showFields,
+    template.fontScale ?? 'STANDARD',
+    template.barcodeHeightMm,
+    template.customWidthMm,
+    template.customHeightMm
+  );
+  const { widthMm, heightMm } = getPaperDimensionsMm(
+    template.paperSize,
+    template.customWidthMm,
+    template.customHeightMm
+  );
+  const defaultByKey = new Map(defaults.map((d) => [d.key, d]));
+
+  if (Array.isArray(template.elementLayouts) && template.elementLayouts.length > 0) {
+    const incomingByKey = new Map(template.elementLayouts.map((l) => [l.key, l]));
+    const order = normalizeElementOrder([
+      ...template.elementLayouts.map((l) => l.key),
+      ...(template.elementOrder ?? []),
+    ]);
+    return order
+      .map((key) => {
+        const def = defaultByKey.get(key);
+        const inc = incomingByKey.get(key);
+        if (!inc && def) return def;
+        if (!inc) return null;
+        const kind = resolveElementKind(inc);
+        const minSize = kind === 'BOX' ? 0.2 : 1.2;
+        const maxSize = kind === 'BOX' ? heightMm : 36;
+        const base: LabelElementLayout = {
+          ...(def ?? {}),
+          ...inc,
+          key,
+          kind,
+          visible: Boolean(inc.visible),
+          xMm: Math.max(0, Math.min(widthMm - 1, Number(inc.xMm) || 0)),
+          yMm: Math.max(0, Math.min(heightMm - 1, Number(inc.yMm) || 0)),
+          fontSizeMm: Math.max(
+            minSize,
+            Math.min(maxSize, Number(inc.fontSizeMm) || def?.fontSizeMm || 2.4)
+          ),
+          widthMm: Math.max(
+            4,
+            Math.min(widthMm, Number(inc.widthMm) || def?.widthMm || Math.max(16, widthMm - 4))
+          ),
+          rotation: inc.rotation ?? def?.rotation ?? 'N',
+          fontFamily: inc.fontFamily ?? def?.fontFamily ?? '0',
+          textAlign: inc.textAlign ?? def?.textAlign ?? 'LEFT',
+        };
+        if (isBarcodeElement(base)) {
+          base.hriPosition = inc.hriPosition ?? def?.hriPosition ?? 'BOTTOM';
+          base.hriFontSizeMm = Math.max(
+            1.2,
+            Math.min(12, Number(inc.hriFontSizeMm) || def?.hriFontSizeMm || 2.0)
+          );
+          base.hriFontFamily = inc.hriFontFamily ?? def?.hriFontFamily ?? '0';
+          base.hriAlign = inc.hriAlign ?? def?.hriAlign ?? 'LEFT';
+          base.hriBold = inc.hriBold ?? def?.hriBold ?? true;
+          base.hriInvert = inc.hriInvert ?? false;
+          base.hriOffsetXMm = Number.isFinite(Number(inc.hriOffsetXMm))
+            ? Number(inc.hriOffsetXMm)
+            : def?.hriOffsetXMm ?? 0;
+          base.hriOffsetYMm = Number.isFinite(Number(inc.hriOffsetYMm))
+            ? Number(inc.hriOffsetYMm)
+            : def?.hriOffsetYMm ?? 0.5;
+          if (inc.moduleWidthDots !== undefined) {
+            base.moduleWidthDots = Math.max(1, Math.min(8, Math.round(Number(inc.moduleWidthDots) || 2)));
+          }
+        }
+        if (kind === 'BOX') {
+          base.borderThicknessMm = Math.max(
+            0.2,
+            Math.min(5, Number(inc.borderThicknessMm) || 0.4)
+          );
+        }
+        return base;
+      })
+      .filter((item): item is LabelElementLayout => item !== null);
+  }
+
+  const order = normalizeElementOrder(template.elementOrder);
+  return order
+    .map((key) => defaultByKey.get(key))
+    .filter((item): item is LabelElementLayout => Boolean(item));
 }
 
 export function buildZplVariables(
@@ -147,6 +451,210 @@ export function buildZplVariables(
   };
 }
 
+export interface ComputedHriBox {
+  visible: boolean;
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  fontSizeMm: number;
+  fontFamily: LabelFontFamily;
+  bold: boolean;
+  invert: boolean;
+  align: LabelTextAlign;
+  text: string;
+}
+
+export function resolveBarcodeValue(
+  el: LabelElementLayout,
+  barcodeType: LabelBarcodeType,
+  vars: Record<string, string>
+): string {
+  if (el.barcodeContent && el.barcodeContent.trim()) {
+    return interpolateZplTemplate(el.barcodeContent, vars);
+  }
+  if (barcodeType === 'QR' || barcodeType === 'DATAMATRIX') {
+    return vars.COMPOSITE;
+  }
+  return vars.REEL_ID;
+}
+
+export function computeBarcodeHriBoxMm(
+  el: LabelElementLayout,
+  barcodeType: LabelBarcodeType,
+  vars: Record<string, string>,
+  paperWidthMm: number,
+  paperHeightMm: number
+): ComputedHriBox {
+  const pos: BarcodeHriPosition = el.hriPosition ?? 'BOTTOM';
+  const fontSizeMm = Math.max(1.2, Math.min(12, el.hriFontSizeMm ?? 2.0));
+  const fontFamily: LabelFontFamily = el.hriFontFamily ?? '0';
+  const bold = el.hriBold ?? true;
+  const invert = Boolean(el.hriInvert);
+  const align: LabelTextAlign = el.hriAlign ?? 'LEFT';
+  const barcodeVal = resolveBarcodeValue(el, barcodeType, vars);
+  const text =
+    el.hriTextTemplate && el.hriTextTemplate.trim()
+      ? interpolateZplTemplate(el.hriTextTemplate, vars)
+      : barcodeType === 'QR' || barcodeType === 'DATAMATRIX'
+      ? vars.REEL_ID
+      : barcodeVal;
+
+  if (pos === 'NONE' || !text) {
+    return {
+      visible: false,
+      xMm: el.xMm,
+      yMm: el.yMm,
+      widthMm: el.widthMm ?? 20,
+      fontSizeMm,
+      fontFamily,
+      bold,
+      invert,
+      align,
+      text,
+    };
+  }
+
+  const is2D = barcodeType === 'QR' || barcodeType === 'DATAMATRIX';
+  const barWidthMm = is2D
+    ? Math.max(6, el.fontSizeMm || 8)
+    : el.widthMm ?? Math.max(16, paperWidthMm - el.xMm * 2);
+  const barHeightMm = Math.max(4, el.fontSizeMm || 8);
+  const dx = Number(el.hriOffsetXMm) || 0;
+  const dy = Number(el.hriOffsetYMm) || 0;
+
+  let xMm = el.xMm;
+  let yMm = el.yMm;
+  let boxWidthMm = is2D ? Math.max(barWidthMm, Math.min(paperWidthMm - el.xMm, 26)) : barWidthMm;
+
+  if (pos === 'BOTTOM') {
+    xMm = el.xMm + dx;
+    yMm = el.yMm + barHeightMm + 0.5 + dy;
+  } else if (pos === 'TOP') {
+    xMm = el.xMm + dx;
+    yMm = el.yMm - fontSizeMm - 0.6 + dy;
+  } else if (pos === 'RIGHT') {
+    xMm = el.xMm + barWidthMm + 1.2 + dx;
+    yMm = el.yMm + Math.max(0, (barHeightMm - fontSizeMm) / 2) + dy;
+    boxWidthMm = Math.max(12, paperWidthMm - xMm - 1);
+  } else if (pos === 'LEFT') {
+    boxWidthMm = Math.max(10, Math.min(el.xMm - 1.5, 24));
+    xMm = Math.max(0.5, el.xMm - boxWidthMm - 1.0) + dx;
+    yMm = el.yMm + Math.max(0, (barHeightMm - fontSizeMm) / 2) + dy;
+  } else {
+    // CUSTOM: user-specified offset relative to barcode origin
+    xMm = el.xMm + dx;
+    yMm = el.yMm + dy;
+  }
+
+  return {
+    visible: true,
+    xMm: Math.max(0, Math.min(paperWidthMm - 2, Math.round(xMm * 10) / 10)),
+    yMm: Math.max(0, Math.min(paperHeightMm - 1.5, Math.round(yMm * 10) / 10)),
+    widthMm: Math.max(6, Math.round(boxWidthMm * 10) / 10),
+    fontSizeMm,
+    fontFamily,
+    bold,
+    invert,
+    align,
+    text,
+  };
+}
+
+export function buildGlobalShiftZplLines(
+  offsetXMm = 0,
+  offsetYMm = 0,
+  dpi = 203
+): { lines: string[]; shiftXDots: number; shiftYDots: number; summary: string } {
+  const safeX = Number.isFinite(offsetXMm) ? Math.max(-30, Math.min(30, offsetXMm)) : 0;
+  const safeY = Number.isFinite(offsetYMm) ? Math.max(-30, Math.min(30, offsetYMm)) : 0;
+  const shiftXDots = mmToSignedDots(safeX, dpi);
+  const shiftYDots = mmToSignedDots(safeY, dpi);
+
+  const lhX = Math.max(0, shiftXDots);
+  const lhY = Math.max(0, shiftYDots);
+  const lines: string[] = [`^LH${lhX},${lhY}`];
+  const parts: string[] = [`^LH${lhX},${lhY}`];
+
+  if (shiftXDots < 0) {
+    lines.push(`^LS${shiftXDots}`);
+    parts.push(`^LS${shiftXDots}`);
+  }
+  if (shiftYDots < 0) {
+    const clampedLt = Math.max(-120, shiftYDots);
+    lines.push(`^LT${clampedLt}`);
+    parts.push(`^LT${clampedLt}`);
+  }
+
+  return {
+    lines,
+    shiftXDots,
+    shiftYDots,
+    summary: parts.join(' '),
+  };
+}
+
+function alignToZplFb(align?: LabelTextAlign): 'L' | 'C' | 'R' {
+  if (align === 'CENTER') return 'C';
+  if (align === 'RIGHT') return 'R';
+  return 'L';
+}
+
+function emitStyledZplTextLines(params: {
+  x: number;
+  y: number;
+  fh: number;
+  fw: number;
+  boxW: number;
+  rot: LabelElementRotation;
+  fontFamily?: LabelFontFamily;
+  align?: LabelTextAlign;
+  bold?: boolean;
+  invert?: boolean;
+  text: string;
+}): string[] {
+  const {
+    x,
+    y,
+    fh,
+    fw,
+    boxW,
+    rot,
+    fontFamily = '0',
+    align = 'LEFT',
+    bold = false,
+    invert = false,
+    text,
+  } = params;
+  if (!text) return [];
+
+  const out: string[] = [];
+  const fbAlign = alignToZplFb(align);
+  const fontCmd = `^A${fontFamily}${rot},${fh},${fw}`;
+  const fbCmd = align !== 'LEFT' ? `^FB${boxW},1,0,${fbAlign}` : '';
+
+  if (invert) {
+    const padX = Math.max(3, Math.round(fh * 0.18));
+    const padY = Math.max(2, Math.round(fh * 0.15));
+    const estW =
+      align === 'LEFT'
+        ? Math.min(boxW, Math.max(fh * 2, Math.round(text.length * fw * 0.68) + padX * 2))
+        : boxW;
+    const bgH = fh + padY * 2;
+    out.push(`^FO${Math.max(0, x - padX)},${Math.max(0, y - padY)}^GB${estW},${bgH},${bgH}^FS`);
+    out.push(`^FO${x},${y}^FR${fontCmd}${fbCmd}^FD${text}^FS`);
+    if (bold) {
+      out.push(`^FO${x + 1},${y}^FR${fontCmd}${fbCmd}^FD${text}^FS`);
+    }
+    return out;
+  }
+
+  out.push(`^FO${x},${y}${fontCmd}${fbCmd}^FD${text}^FS`);
+  if (bold) {
+    out.push(`^FO${x + 1},${y}${fontCmd}${fbCmd}^FD${text}^FS`);
+  }
+  return out;
+}
+
 export function generateZplFromTemplate(options: {
   template: LabelTemplate;
   reel: ReelItem;
@@ -154,6 +662,8 @@ export function generateZplFromTemplate(options: {
   copies?: number;
   darkness?: number;
   printSpeed?: number;
+  offsetXMm?: number;
+  offsetYMm?: number;
   forceVisual?: boolean;
 }): string {
   const {
@@ -163,16 +673,26 @@ export function generateZplFromTemplate(options: {
     copies = 1,
     darkness = 18,
     printSpeed = 4,
+    offsetXMm,
+    offsetYMm,
     forceVisual = false,
   } = options;
 
-  const dpi: 203 | 300 = template.dpi === 300 ? 300 : 203;
-  const { widthMm, heightMm } = getPaperDimensionsMm(template.paperSize);
+  const dpi = normalizeDpi(template.dpi);
+  const { widthMm, heightMm } = getPaperDimensionsMm(
+    template.paperSize,
+    template.customWidthMm,
+    template.customHeightMm
+  );
+  const paperLabel = formatPaperSizeLabel(template);
   const pw = mmToDots(widthMm, dpi);
   const ll = mmToDots(heightMm, dpi);
   const safeCopies = Math.max(1, Math.min(999, Math.round(copies || 1)));
   const safeDarkness = Math.max(0, Math.min(30, Math.round(darkness)));
   const safeSpeed = Math.max(2, Math.min(12, Math.round(printSpeed)));
+  const effectiveOffsetX = offsetXMm ?? template.offsetXMm ?? 0;
+  const effectiveOffsetY = offsetYMm ?? template.offsetYMm ?? 0;
+  const shift = buildGlobalShiftZplLines(effectiveOffsetX, effectiveOffsetY, dpi);
   const vars = buildZplVariables(reel, material, template, safeCopies);
 
   if (!forceVisual && template.zplMode === 'CUSTOM_ZPL' && template.customZpl?.trim()) {
@@ -183,6 +703,9 @@ export function generateZplFromTemplate(options: {
     raw = raw.trim();
     if (!raw.startsWith('^XA')) {
       raw = `^XA\n${raw}`;
+    }
+    if (effectiveOffsetX !== 0 || effectiveOffsetY !== 0) {
+      raw = raw.replace(/^\^XA/i, `^XA\n${shift.lines.join('\n')}`);
     }
     if (!/\^PQ\d+/i.test(raw)) {
       const pqLine = `^PQ${safeCopies},0,1,Y`;
@@ -197,188 +720,287 @@ export function generateZplFromTemplate(options: {
     return raw;
   }
 
-  const dpiScale = dpi / 203;
-  const fontScale: LabelFontScale = template.fontScale ?? 'STANDARD';
-  const fontMultiplier =
-    (fontScale === 'COMPACT' ? 0.85 : fontScale === 'LARGE' ? 1.18 : 1.0) *
-    (template.paperSize === '50x30mm'
-      ? 0.86
-      : template.paperSize === '100x60mm'
-      ? 1.28
-      : 1.0);
-
-  const px = (dotsAt203: number) => Math.max(8, Math.round(dotsAt203 * dpiScale * fontMultiplier));
-  const marginX = Math.round(14 * dpiScale);
-  const contentW = pw - marginX * 2;
-  const order = normalizeElementOrder(template.elementOrder);
-  const barcodeType: LabelBarcodeType = template.barcodeType ?? 'CODE128';
-  const barcodeHeightMm =
-    template.barcodeHeightMm && template.barcodeHeightMm >= 4 && template.barcodeHeightMm <= 24
-      ? template.barcodeHeightMm
-      : template.paperSize === '50x30mm'
-      ? 7
-      : template.paperSize === '100x60mm'
-      ? 12
-      : 9;
+  const layouts = normalizeElementLayouts(template);
+  const defaultBarcodeType: LabelBarcodeType = template.barcodeType ?? 'CODE128';
 
   const lines: string[] = [
     '^XA',
     '^CI28',
     `^PW${pw}`,
     `^LL${ll}`,
-    '^LH0,0',
+    ...shift.lines,
     `^MD${safeDarkness}`,
     `^PR${safeSpeed}`,
-    `; Template: ${sanitizeZplText(template.templateName)} (${template.paperSize} @ ${dpi}dpi)`,
+    `; Template: ${sanitizeZplText(template.templateName)} (${paperLabel} @ ${dpi}dpi, Shift X:${effectiveOffsetX}mm Y:${effectiveOffsetY}mm)`,
   ];
 
-  let y = Math.round(10 * dpiScale);
-  const gap = Math.max(4, Math.round(6 * dpiScale));
-  const divider = (curY: number) => {
-    lines.push(`^FO${marginX},${curY}^GB${contentW},1,1^FS`);
-    return curY + Math.max(4, Math.round(4 * dpiScale));
-  };
+  for (const el of layouts) {
+    if (!el.visible) continue;
+    const kind = resolveElementKind(el);
+    const x = mmToDots(el.xMm, dpi);
+    const y = mmToDots(el.yMm, dpi);
+    const fh = Math.max(10, mmToDots(el.fontSizeMm, dpi));
+    const fw = Math.max(8, Math.round(fh * 0.84));
+    const boxW = Math.max(40, mmToDots(el.widthMm ?? widthMm - el.xMm * 2, dpi));
+    const rot: LabelElementRotation = el.rotation ?? 'N';
+    const fontFamily: LabelFontFamily = el.fontFamily ?? '0';
 
-  for (const key of order) {
-    if (y >= ll - Math.round(14 * dpiScale)) break;
-
-    if (key === 'header') {
-      const fh = px(18);
-      const fw = Math.round(fh * 0.82);
-      lines.push(`^FO${marginX},${y}^A0N,${fh},${fw}^FD${vars.HEADER}^FS`);
-      lines.push(
-        `^FO${marginX},${y}^A0N,${Math.round(fh * 0.85)},${Math.round(fw * 0.85)}^FB${contentW},1,0,R^FD${template.paperSize}^FS`
-      );
-      y += fh + Math.round(4 * dpiScale);
-      y = divider(y);
+    if (kind === 'BOX') {
+      const boxH = Math.max(1, mmToDots(el.fontSizeMm, dpi));
+      const thick = Math.max(1, mmToDots(el.borderThicknessMm ?? 0.4, dpi));
+      lines.push(`^FO${x},${y}^GB${boxW},${boxH},${thick}^FS`);
       continue;
     }
 
-    if (key === 'mpnQty') {
-      const mpnH = px(26);
-      const mpnW = Math.round(mpnH * 0.85);
-      lines.push(`^FO${marginX},${y}^A0N,${mpnH},${mpnW}^FDMPN:${vars.MPN}^FS`);
+    if (kind === 'TEXT') {
+      const resolved = interpolateZplTemplate(el.contentTemplate ?? '', vars);
       lines.push(
-        `^FO${marginX},${y}^A0N,${mpnH},${mpnW}^FB${contentW},1,0,R^FDQTY:${vars.QTY} ${vars.UNIT}^FS`
+        ...emitStyledZplTextLines({
+          x,
+          y,
+          fh,
+          fw,
+          boxW,
+          rot,
+          fontFamily,
+          align: el.textAlign ?? 'LEFT',
+          bold: Boolean(el.bold),
+          invert: Boolean(el.invert),
+          text: resolved,
+        })
       );
-      y += mpnH + Math.round(3 * dpiScale);
-      if (template.showFields.skuCode) {
-        const skuH = px(16);
-        lines.push(
-          `^FO${marginX},${y}^A0N,${skuH},${Math.round(skuH * 0.85)}^FDSKU:${vars.SKU}^FS`
-        );
-        y += skuH + Math.round(3 * dpiScale);
+      continue;
+    }
+
+    if (isBarcodeElement(el)) {
+      const bcType: LabelBarcodeType =
+        el.key === 'barcode' ? el.barcodeType ?? defaultBarcodeType : el.barcodeType ?? 'CODE128';
+      const barH = Math.max(20, mmToDots(el.fontSizeMm || template.barcodeHeightMm || 8, dpi));
+      const bcData = resolveBarcodeValue(el, bcType, vars);
+      const defaultModuleW = dpi >= 450 ? 4 : dpi >= 280 ? 3 : widthMm <= 55 ? 1 : 2;
+      const modW = el.moduleWidthDots ?? defaultModuleW;
+
+      if (bcType === 'CODE128') {
+        lines.push(`^FO${x},${y}^BY${modW},2,${barH}`);
+        // Always disable rigid built-in HRI ('N') so our positioned & styled HRI text below is exact
+        lines.push(`^BC${rot},${barH},N,N,N^FD${bcData}^FS`);
+      } else if (bcType === 'CODE39') {
+        lines.push(`^FO${x},${y}^BY${modW},2,${barH}`);
+        lines.push(`^B3${rot},N,${barH},N,N^FD${bcData.toUpperCase()}^FS`);
+      } else if (bcType === 'QR') {
+        const mag =
+          el.moduleWidthDots ??
+          Math.max(2, Math.min(10, Math.round((el.fontSizeMm || 8) * (dpi / 203) * 0.42)));
+        lines.push(`^FO${x},${y}^BQ${rot},2,${mag}^FDQA,${bcData}^FS`);
+      } else {
+        const modDots =
+          el.moduleWidthDots ??
+          Math.max(3, Math.min(10, Math.round((el.fontSizeMm || 8) * (dpi / 203) * 0.5)));
+        lines.push(`^FO${x},${y}^BX${rot},${modDots},200^FD${bcData}^FS`);
       }
-      y = divider(y);
+
+      const hri = computeBarcodeHriBoxMm(el, bcType, vars, widthMm, heightMm);
+      if (hri.visible) {
+        const hriX = mmToDots(hri.xMm, dpi);
+        const hriY = mmToDots(hri.yMm, dpi);
+        const hriFh = Math.max(10, mmToDots(hri.fontSizeMm, dpi));
+        const hriFw = Math.max(8, Math.round(hriFh * 0.84));
+        const hriBoxW = Math.max(40, mmToDots(hri.widthMm, dpi));
+        lines.push(
+          ...emitStyledZplTextLines({
+            x: hriX,
+            y: hriY,
+            fh: hriFh,
+            fw: hriFw,
+            boxW: hriBoxW,
+            rot,
+            fontFamily: hri.fontFamily,
+            align: hri.align,
+            bold: hri.bold,
+            invert: hri.invert,
+            text: hri.text,
+          })
+        );
+      }
       continue;
     }
 
-    if (key === 'lotDcBin') {
-      if (!template.showFields.lotDateCode && !template.showFields.binMsd) continue;
-      const fh = px(17);
-      const fw = Math.round(fh * 0.82);
-      const leftTxt = template.showFields.lotDateCode
-        ? `LOT:${vars.LOT}  D/C:${vars.DC}`
-        : '';
+    // Built-in fields (also respect custom fontFamily / bold / invert / contentTemplate override)
+    if (el.contentTemplate && el.contentTemplate.trim()) {
+      const overrideText = interpolateZplTemplate(el.contentTemplate, vars);
+      lines.push(
+        ...emitStyledZplTextLines({
+          x,
+          y,
+          fh,
+          fw,
+          boxW,
+          rot,
+          fontFamily,
+          align: el.textAlign ?? 'LEFT',
+          bold: Boolean(el.bold),
+          invert: Boolean(el.invert),
+          text: overrideText,
+        })
+      );
+      continue;
+    }
+
+    if (el.key === 'header') {
+      lines.push(
+        ...emitStyledZplTextLines({
+          x,
+          y,
+          fh,
+          fw,
+          boxW,
+          rot,
+          fontFamily,
+          bold: Boolean(el.bold),
+          invert: Boolean(el.invert),
+          text: vars.HEADER,
+        })
+      );
+      lines.push(
+        `^FO${x},${y}^A${fontFamily}${rot},${Math.round(fh * 0.85)},${Math.round(fw * 0.85)}^FB${boxW},1,0,R^FD${paperLabel}^FS`
+      );
+      lines.push(`^FO${x},${y + fh + Math.round(fh * 0.18)}^GB${boxW},1,1^FS`);
+      continue;
+    }
+
+    if (el.key === 'mpnQty') {
+      lines.push(
+        ...emitStyledZplTextLines({
+          x,
+          y,
+          fh,
+          fw,
+          boxW,
+          rot,
+          fontFamily,
+          bold: Boolean(el.bold),
+          invert: Boolean(el.invert),
+          text: `MPN:${vars.MPN}`,
+        })
+      );
+      lines.push(
+        `^FO${x},${y}^A${fontFamily}${rot},${fh},${fw}^FB${boxW},1,0,R^FDQTY:${vars.QTY} ${vars.UNIT}^FS`
+      );
+      if (template.showFields.skuCode) {
+        const skuH = Math.max(10, Math.round(fh * 0.65));
+        lines.push(
+          `^FO${x},${y + fh + Math.round(fh * 0.12)}^A${fontFamily}${rot},${skuH},${Math.round(skuH * 0.85)}^FDSKU:${vars.SKU}^FS`
+        );
+      }
+      continue;
+    }
+
+    if (el.key === 'lotDcBin') {
+      const leftTxt = template.showFields.lotDateCode ? `LOT:${vars.LOT}  D/C:${vars.DC}` : '';
       const rightTxt = template.showFields.binMsd ? `BIN:${vars.BIN} ${vars.MSD}` : '';
       if (leftTxt) {
-        lines.push(`^FO${marginX},${y}^A0N,${fh},${fw}^FD${leftTxt}^FS`);
+        lines.push(
+          ...emitStyledZplTextLines({
+            x,
+            y,
+            fh,
+            fw,
+            boxW,
+            rot,
+            fontFamily,
+            bold: Boolean(el.bold),
+            invert: Boolean(el.invert),
+            text: leftTxt,
+          })
+        );
       }
       if (rightTxt) {
-        lines.push(`^FO${marginX},${y}^A0N,${fh},${fw}^FB${contentW},1,0,R^FD${rightTxt}^FS`);
+        lines.push(`^FO${x},${y}^A${fontFamily}${rot},${fh},${fw}^FB${boxW},1,0,R^FD${rightTxt}^FS`);
       }
-      y += fh + gap;
       continue;
     }
 
-    if (key === 'ownership') {
-      if (!template.showFields.ownership) continue;
-      const fh = px(16);
+    if (el.key === 'ownership') {
       lines.push(
-        `^FO${marginX},${y}^A0N,${fh},${Math.round(fh * 0.82)}^FD[${vars.OWNERSHIP}] ${vars.OWNER} (${vars.CUSTOMER})^FS`
+        ...emitStyledZplTextLines({
+          x,
+          y,
+          fh,
+          fw,
+          boxW,
+          rot,
+          fontFamily,
+          align: el.textAlign ?? 'LEFT',
+          bold: Boolean(el.bold),
+          invert: Boolean(el.invert),
+          text: `[${vars.OWNERSHIP}] ${vars.OWNER} (${vars.CUSTOMER})`,
+        })
       );
-      y += fh + gap;
       continue;
     }
 
-    if (key === 'packagingMpq') {
-      if (!template.showFields.packagingMpq) continue;
-      const fh = px(16);
+    if (el.key === 'packagingMpq') {
       const mpqPart = vars.MPQ ? ` MPQ:${vars.MPQ}` : '';
       lines.push(
-        `^FO${marginX},${y}^A0N,${fh},${Math.round(fh * 0.82)}^FDPKG:${vars.PACKAGING}${mpqPart}^FS`
+        ...emitStyledZplTextLines({
+          x,
+          y,
+          fh,
+          fw,
+          boxW,
+          rot,
+          fontFamily,
+          align: el.textAlign ?? 'LEFT',
+          bold: Boolean(el.bold),
+          invert: Boolean(el.invert),
+          text: `PKG:${vars.PACKAGING}${mpqPart}`,
+        })
       );
-      y += fh + gap;
       continue;
     }
 
-    if (key === 'supplier') {
-      if (!template.showFields.supplier) continue;
-      const fh = px(16);
+    if (el.key === 'supplier') {
       lines.push(
-        `^FO${marginX},${y}^A0N,${fh},${Math.round(fh * 0.82)}^FDSUP:${vars.SUPPLIER}^FS`
+        ...emitStyledZplTextLines({
+          x,
+          y,
+          fh,
+          fw,
+          boxW,
+          rot,
+          fontFamily,
+          align: el.textAlign ?? 'LEFT',
+          bold: Boolean(el.bold),
+          invert: Boolean(el.invert),
+          text: `SUP:${vars.SUPPLIER}`,
+        })
       );
-      y += fh + gap;
       continue;
     }
 
-    if (key === 'barcode') {
-      const barDots = Math.min(
-        mmToDots(barcodeHeightMm, dpi),
-        Math.max(Math.round(28 * dpiScale), ll - y - Math.round(36 * dpiScale))
-      );
-      if (barcodeType === 'CODE128') {
-        const moduleW = dpi === 300 ? 3 : template.paperSize === '50x30mm' ? 1 : 2;
-        lines.push(`^FO${marginX},${y}^BY${moduleW},2,${barDots}`);
-        lines.push(`^BCN,${barDots},Y,N,N^FD${vars.REEL_ID}^FS`);
-        y += barDots + Math.round(22 * dpiScale);
-      } else if (barcodeType === 'QR') {
-        const mag = dpi === 300 ? 5 : template.paperSize === '50x30mm' ? 3 : 4;
-        lines.push(`^FO${marginX},${y}^BQN,2,${mag}^FDQA,${vars.COMPOSITE}^FS`);
-        const infoX = marginX + Math.round(mag * 28);
-        const uidH = px(18);
-        lines.push(
-          `^FO${infoX},${y + Math.round(8 * dpiScale)}^A0N,${uidH},${Math.round(uidH * 0.85)}^FDUID:${vars.REEL_ID}^FS`
-        );
-        lines.push(
-          `^FO${infoX},${y + Math.round(28 * dpiScale)}^A0N,${px(14)},${Math.round(px(14) * 0.85)}^FDLOT:${vars.LOT} DC:${vars.DC}^FS`
-        );
-        y += Math.max(barDots, mag * 26) + gap;
-      } else {
-        const modDots = dpi === 300 ? 6 : template.paperSize === '50x30mm' ? 4 : 5;
-        lines.push(`^FO${marginX},${y}^BXN,${modDots},200^FD${vars.COMPOSITE}^FS`);
-        const infoX = marginX + Math.round(modDots * 24);
-        const uidH = px(18);
-        lines.push(
-          `^FO${infoX},${y + Math.round(8 * dpiScale)}^A0N,${uidH},${Math.round(uidH * 0.85)}^FDUID:${vars.REEL_ID}^FS`
-        );
-        lines.push(
-          `^FO${infoX},${y + Math.round(28 * dpiScale)}^A0N,${px(14)},${Math.round(px(14) * 0.85)}^FDMPN:${vars.MPN}^FS`
-        );
-        y += Math.max(barDots, modDots * 22) + gap;
-      }
+    if (el.key === 'composite') {
+      lines.push(`^FO${x},${y}^A${fontFamily}${rot},${fh},${fw}^FB${boxW},2,0,L^FD${vars.COMPOSITE}^FS`);
       continue;
     }
 
-    if (key === 'composite') {
-      if (!template.showFields.compositeBarcode) continue;
-      const fh = px(14);
-      lines.push(
-        `^FO${marginX},${y}^A0N,${fh},${Math.round(fh * 0.82)}^FB${contentW},2,0,L^FD${vars.COMPOSITE}^FS`
-      );
-      y += fh * 2 + gap;
-      continue;
-    }
-
-    if (key === 'footer') {
+    if (el.key === 'footer') {
       if (!vars.FOOTER) continue;
-      const fh = px(14);
-      const footerY = Math.max(y, ll - fh - Math.round(10 * dpiScale));
-      lines.push(`^FO${marginX},${footerY - Math.round(4 * dpiScale)}^GB${contentW},1,1^FS`);
+      lines.push(`^FO${x},${Math.max(0, y - 4)}^GB${boxW},1,1^FS`);
       lines.push(
-        `^FO${marginX},${footerY}^A0N,${fh},${Math.round(fh * 0.82)}^FD${vars.FOOTER}^FS`
+        ...emitStyledZplTextLines({
+          x,
+          y,
+          fh,
+          fw,
+          boxW,
+          rot,
+          fontFamily,
+          align: el.textAlign ?? 'LEFT',
+          bold: Boolean(el.bold),
+          invert: Boolean(el.invert),
+          text: vars.FOOTER,
+        })
       );
-      y = footerY + fh + 4;
     }
   }
 
@@ -399,7 +1021,6 @@ export function generatePseudo2dMatrix(
     Array.from({ length: size }, () => false)
   );
 
-  // Hash seed from text
   let hash = 2166136261;
   for (let i = 0; i < text.length; i++) {
     hash ^= text.charCodeAt(i);
@@ -423,7 +1044,6 @@ export function generatePseudo2dMatrix(
           grid[top + dr][left + dc] = isBorder || isCenter;
         }
       }
-      // Quiet separator
       for (let k = -1; k <= 7; k++) {
         if (top + 7 < size && left + k >= 0 && left + k < size) grid[top + 7][left + k] = false;
         if (top - 1 >= 0 && left + k >= 0 && left + k < size) grid[top - 1][left + k] = false;
@@ -435,7 +1055,6 @@ export function generatePseudo2dMatrix(
     drawFinder(0, size - 7);
     drawFinder(size - 7, 0);
   } else {
-    // DataMatrix L-shaped solid finder & alternating timing edges
     for (let i = 0; i < size; i++) {
       grid[i][0] = true;
       grid[size - 1][i] = true;

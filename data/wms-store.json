@@ -1,4 +1,13 @@
 {
+  "printerConfig": {
+    "mode": "LAN_TCP",
+    "host": "192.168.10.88",
+    "port": 9100,
+    "browserPrintUrl": "http://127.0.0.1:9100",
+    "selectedDeviceName": "",
+    "darkness": 18,
+    "printSpeed": 4
+  },
   "warehouses": [
     {
       "warehouseCode": "WH-SMT-01",
@@ -354,6 +363,22 @@
       "templateId": "TPL-STD-50X30",
       "templateName": "SMT 料盘标准追溯标 (50×30mm)",
       "paperSize": "50x30mm",
+      "dpi": 203,
+      "barcodeType": "CODE128",
+      "zplMode": "VISUAL",
+      "fontScale": "COMPACT",
+      "barcodeHeightMm": 7,
+      "elementOrder": [
+        "header",
+        "mpnQty",
+        "lotDcBin",
+        "ownership",
+        "packagingMpq",
+        "barcode",
+        "composite",
+        "footer",
+        "supplier"
+      ],
       "headerTitle": "智造 SMT-WMS · 料盘唯一标识",
       "footerNote": "严格FIFO先进先出 · 扫码上机防错校验",
       "showFields": {
@@ -372,6 +397,22 @@
       "templateId": "TPL-CONSIGN-70X40",
       "templateName": "客供/VMI 产权隔离详标 (70×40mm)",
       "paperSize": "70x40mm",
+      "dpi": 203,
+      "barcodeType": "QR",
+      "zplMode": "VISUAL",
+      "fontScale": "STANDARD",
+      "barcodeHeightMm": 10,
+      "elementOrder": [
+        "header",
+        "mpnQty",
+        "lotDcBin",
+        "ownership",
+        "packagingMpq",
+        "supplier",
+        "barcode",
+        "composite",
+        "footer"
+      ],
       "headerTitle": "客供/VMI 专仓独立产权追溯卡",
       "footerNote": "专料专账隔离管控 · 严禁混用或挪用他单",
       "showFields": {
@@ -390,6 +431,22 @@
       "templateId": "TPL-BOX-100X60",
       "templateName": "外箱 / PCB防潮大标 (100×60mm)",
       "paperSize": "100x60mm",
+      "dpi": 300,
+      "barcodeType": "DATAMATRIX",
+      "zplMode": "VISUAL",
+      "fontScale": "LARGE",
+      "barcodeHeightMm": 12,
+      "elementOrder": [
+        "header",
+        "mpnQty",
+        "lotDcBin",
+        "ownership",
+        "packagingMpq",
+        "supplier",
+        "barcode",
+        "composite",
+        "footer"
+      ],
       "headerTitle": "来料 IQC 检验合格外箱大标签",
       "footerNote": "遵循 IPC-1782 追溯规范 · 拆包需复核MSD寿命",
       "showFields": {
@@ -1180,11 +1237,11 @@
       "binCode": "LINE-SMT-01",
       "msdLevel": "Level 3",
       "msdState": "EXPOSED",
-      "msdOpenAt": "2026-11-11T15:08:12.979Z",
+      "msdOpenAt": "2026-11-12T13:02:05.668Z",
       "status": "ISSUED_TO_LINE",
       "workOrderId": "WO-20261115-01",
       "receivedAt": "2026-11-06T09:00:00.000Z",
-      "updatedAt": "2026-11-11T15:08:12.979Z"
+      "updatedAt": "2026-11-12T13:02:05.668Z"
     },
     {
       "reelId": "RL261106-013",

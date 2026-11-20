@@ -25,7 +25,11 @@ import type {
   ZebraPrinterMode,
 } from '../types/wms';
 import { buildCompositeBarcode } from '../utils/formatters';
-import { generateZplFromTemplate } from '../utils/zplEngine';
+import {
+  formatPaperSizeLabel,
+  generateZplFromTemplate,
+  normalizeDpi,
+} from '../utils/zplEngine';
 import { ThermalLabelPreview } from './ThermalLabelPreview';
 
 interface BarcodeLabelModalProps {
@@ -93,9 +97,14 @@ export function BarcodeLabelModal({
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [statusErr, setStatusErr] = useState<string | null>(null);
 
+  const [printOffsetXMm, setPrintOffsetXMm] = useState<number>(defaultTemplate?.offsetXMm ?? 0);
+  const [printOffsetYMm, setPrintOffsetYMm] = useState<number>(defaultTemplate?.offsetYMm ?? 0);
+
   useEffect(() => {
     if (defaultTemplate) {
       setSelectedTplId(defaultTemplate.templateId);
+      setPrintOffsetXMm(defaultTemplate.offsetXMm ?? 0);
+      setPrintOffsetYMm(defaultTemplate.offsetYMm ?? 0);
     }
   }, [defaultTemplate?.templateId, reel?.reelId]);
 
@@ -129,6 +138,8 @@ export function BarcodeLabelModal({
     copies,
     darkness,
     printSpeed,
+    offsetXMm: printOffsetXMm,
+    offsetYMm: printOffsetYMm,
   });
 
   const handleCopy = async (kind: 'COMPOSITE' | 'ZPL') => {
@@ -284,16 +295,23 @@ export function BarcodeLabelModal({
             <select
               id="lbl-tpl-select"
               value={activeTpl.templateId}
-              onChange={(e) => setSelectedTplId(e.target.value)}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                setSelectedTplId(nextId);
+                const nextTpl = templates.find((t) => t.templateId === nextId);
+                setPrintOffsetXMm(nextTpl?.offsetXMm ?? 0);
+                setPrintOffsetYMm(nextTpl?.offsetYMm ?? 0);
+              }}
               className="flex-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs"
             >
               {(templates.length > 0 ? templates : [activeTpl]).map((t) => {
+                const dimLabel = formatPaperSizeLabel(t);
                 const normalizedName = t.templateName.replace('×', 'x').toLowerCase();
-                const alreadyHasDim = normalizedName.includes(t.paperSize.toLowerCase());
+                const alreadyHasDim = normalizedName.includes(dimLabel.replace('×', 'x').toLowerCase());
                 return (
                   <option key={t.templateId} value={t.templateId}>
-                    {alreadyHasDim ? t.templateName : `${t.templateName} (${t.paperSize})`} ·{' '}
-                    {t.dpi ?? 203}dpi · {t.barcodeType ?? 'CODE128'}
+                    {alreadyHasDim ? t.templateName : `${t.templateName} (${dimLabel})`} ·{' '}
+                    {normalizeDpi(t.dpi)}dpi
                   </option>
                 );
               })}
@@ -337,6 +355,8 @@ export function BarcodeLabelModal({
                 template={activeTpl}
                 reel={reel}
                 material={matchedMaterial}
+                offsetXMm={printOffsetXMm}
+                offsetYMm={printOffsetYMm}
                 compact
               />
             </div>
@@ -344,7 +364,7 @@ export function BarcodeLabelModal({
             <div className="no-print space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-mono text-slate-600">
-                  生成指令：{activeTpl.paperSize} @ {activeTpl.dpi ?? 203} dpi · 打印黑度 ^MD{darkness} · 速度 ^PR{printSpeed}
+                  生成指令：{formatPaperSizeLabel(activeTpl)} @ {normalizeDpi(activeTpl.dpi)} dpi · 偏移 ({printOffsetXMm},{printOffsetYMm})mm · 黑度 ^MD{darkness}
                 </span>
                 <div className="inline-flex items-center gap-2">
                   <button
@@ -498,10 +518,44 @@ export function BarcodeLabelModal({
               )}
             </div>
 
-            <div className="mt-2.5 grid grid-cols-3 gap-2.5">
+            <div className="mt-2.5 grid grid-cols-5 gap-2">
+              <div>
+                <label htmlFor="zpl-offset-x" className="block text-[11px] font-medium text-slate-600">
+                  整体 X 移转(mm)
+                </label>
+                <input
+                  id="zpl-offset-x"
+                  type="number"
+                  step="any"
+                  min={-30}
+                  max={30}
+                  value={printOffsetXMm}
+                  onChange={(e) =>
+                    setPrintOffsetXMm(Math.max(-30, Math.min(30, Number(e.target.value) || 0)))
+                  }
+                  className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs tabular-nums"
+                />
+              </div>
+              <div>
+                <label htmlFor="zpl-offset-y" className="block text-[11px] font-medium text-slate-600">
+                  整体 Y 移转(mm)
+                </label>
+                <input
+                  id="zpl-offset-y"
+                  type="number"
+                  step="any"
+                  min={-30}
+                  max={30}
+                  value={printOffsetYMm}
+                  onChange={(e) =>
+                    setPrintOffsetYMm(Math.max(-30, Math.min(30, Number(e.target.value) || 0)))
+                  }
+                  className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs tabular-nums"
+                />
+              </div>
               <div>
                 <label htmlFor="zpl-darkness" className="block text-[11px] font-medium text-slate-600">
-                  打印黑度 ^MD (0-30)
+                  黑度 ^MD (0-30)
                 </label>
                 <input
                   id="zpl-darkness"
@@ -515,7 +569,7 @@ export function BarcodeLabelModal({
               </div>
               <div>
                 <label htmlFor="zpl-speed" className="block text-[11px] font-medium text-slate-600">
-                  打印速度 ^PR (2-12 ips)
+                  速度 ^PR (2-12)
                 </label>
                 <input
                   id="zpl-speed"
@@ -529,7 +583,7 @@ export function BarcodeLabelModal({
               </div>
               <div>
                 <label htmlFor="zpl-copies" className="block text-[11px] font-medium text-slate-600">
-                  打印份数 ^PQ
+                  份数 ^PQ
                 </label>
                 <input
                   id="zpl-copies"

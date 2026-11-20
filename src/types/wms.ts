@@ -132,7 +132,9 @@ export interface ZebraPrinterConfig {
   printSpeed: number;
 }
 
-export type LabelBarcodeType = 'CODE128' | 'QR' | 'DATAMATRIX';
+export type LabelBarcodeType = 'CODE128' | 'CODE39' | 'QR' | 'DATAMATRIX';
+
+export type LabelPaperPreset = '50x30mm' | '70x40mm' | '100x60mm' | 'CUSTOM';
 
 export type LabelElementKey =
   | 'header'
@@ -145,16 +147,66 @@ export type LabelElementKey =
   | 'composite'
   | 'footer';
 
+export type LabelElementKind = 'BUILTIN' | 'TEXT' | 'BARCODE' | 'BOX';
+
 export type LabelFontScale = 'COMPACT' | 'STANDARD' | 'LARGE';
+
+export type LabelElementRotation = 'N' | 'R' | 'I' | 'B';
+
+export type LabelFontFamily = '0' | 'D' | 'B';
+
+export type LabelTextAlign = 'LEFT' | 'CENTER' | 'RIGHT';
+
+export type BarcodeHriPosition = 'NONE' | 'BOTTOM' | 'TOP' | 'LEFT' | 'RIGHT' | 'CUSTOM';
+
+export interface LabelElementLayout {
+  key: string;
+  kind?: LabelElementKind;
+  label?: string;
+  visible: boolean;
+  xMm: number;
+  yMm: number;
+  fontSizeMm: number;
+  widthMm?: number;
+  rotation?: LabelElementRotation;
+  /** 自定义文本内容模板（支持 {{MPN}} / {{REEL_ID}} 等变量） */
+  contentTemplate?: string;
+  fontFamily?: LabelFontFamily;
+  bold?: boolean;
+  invert?: boolean;
+  textAlign?: LabelTextAlign;
+  /** 条码元素专属属性（主条码与自定义新增条码共用） */
+  barcodeType?: LabelBarcodeType;
+  barcodeContent?: string;
+  moduleWidthDots?: number;
+  hriPosition?: BarcodeHriPosition;
+  hriTextTemplate?: string;
+  hriFontSizeMm?: number;
+  hriFontFamily?: LabelFontFamily;
+  hriBold?: boolean;
+  hriInvert?: boolean;
+  hriAlign?: LabelTextAlign;
+  hriOffsetXMm?: number;
+  hriOffsetYMm?: number;
+  /** 线条/边框元素线宽 (mm) */
+  borderThicknessMm?: number;
+}
 
 export interface LabelTemplate {
   templateId: string;
   templateName: string;
-  paperSize: '50x30mm' | '70x40mm' | '100x60mm';
-  dpi?: 203 | 300;
+  paperSize: LabelPaperPreset;
+  customWidthMm?: number;
+  customHeightMm?: number;
+  dpi?: number;
+  /** 整体打印 X 轴偏移校准 (mm，支持正负微调) */
+  offsetXMm?: number;
+  /** 整体打印 Y 轴偏移校准 (mm，支持正负微调) */
+  offsetYMm?: number;
   barcodeType?: LabelBarcodeType;
   zplMode?: 'VISUAL' | 'CUSTOM_ZPL';
-  elementOrder?: LabelElementKey[];
+  elementOrder?: string[];
+  elementLayouts?: LabelElementLayout[];
   fontScale?: LabelFontScale;
   barcodeHeightMm?: number;
   customZpl?: string;
