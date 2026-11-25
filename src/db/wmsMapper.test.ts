@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createSeedData } from '../data/seedData.ts';
-import { normalizeWmsState, saveLabelTemplate } from '../utils/wmsLogic.ts';
+import {
+  confirmAsnDeliveryArrival,
+  normalizeWmsState,
+  saveLabelTemplate,
+} from '../utils/wmsLogic.ts';
 import {
   ALL_WMS_SLICE_KEYS,
   detectChangedSlices,
   mapRowsToPartialWmsState,
+  serializeAsnLinesWithMeta,
 } from './wmsMapper.ts';
 
 test('detectChangedSlices returns all slices when previous state is null', () => {
@@ -105,3 +110,55 @@ test('mapRowsToPartialWmsState preserves custom ZPL fields and relational record
   assert.equal(hydrated.materials.length, mutated.materials.length);
   assert.equal(hydrated.boms.length, mutated.boms.length);
 });
+
+test('serializeAsnLinesWithMeta + mapRowsToPartialWmsState preserves 6-stage ASN workflow metadata losslessly', () => {
+  const seed = createSeedData();
+  const { state: s1 } = confirmAsnDeliveryArrival(seed, {
+    asnNo: 'ASN-20261117-01',
+    deliveryNoteNo: 'DN-TEST-99',
+    carrierName: '德邦物流',
+  });
+  const serializedAsns = s1.asns.map((a) => ({
+    asnNo: a.asnNo,
+    poNo: a.poNo,
+    supplierCode: a.supplierCode,
+    supplierName: a.supplierName,
+    warehouseCode: a.warehouseCode,
+    expectedDate: a.expectedDate,
+    purchaser: a.purchaser,
+    source: a.source,
+    status: a.status,
+    notes: a.notes ?? null,
+    lines: serializeAsnLinesWithMeta(a),
+    createdAt: a.createdAt,
+  }));
+
+  const mapped = mapRowsToPartialWmsState({
+    printerConfig: s1.printerConfig ?? null,
+    warehouses: s1.warehouses as unknown as Array<Record<string, unknown>>,
+    keepers: s1.keepers as unknown as Array<Record<string, unknown>>,
+    bins: s1.bins as unknown as Array<Record<string, unknown>>,
+    suppliers: s1.suppliers as unknown as Array<Record<string, unknown>>,
+    customers: s1.customers as unknown as Array<Record<string, unknown>>,
+    packagingSpecs: s1.packagingSpecs as unknown as Array<Record<string, unknown>>,
+    barcodeRules: s1.barcodeRules as unknown as Array<Record<string, unknown>>,
+    labelTemplates: s1.labelTemplates as unknown as Array<Record<string, unknown>>,
+    materials: s1.materials as unknown as Array<Record<string, unknown>>,
+    boms: s1.boms as unknown as Array<Record<string, unknown>>,
+    asns: serializedAsns as unknown as Array<Record<string, unknown>>,
+    reels: s1.reels as unknown as Array<Record<string, unknown>>,
+    workOrders: s1.workOrders as unknown as Array<Record<string, unknown>>,
+    waves: s1.waves as unknown as Array<Record<string, unknown>>,
+    cycleCounts: s1.cycleCounts as unknown as Array<Record<string, unknown>>,
+    scrapRecords: s1.scrapRecords as unknown as Array<Record<string, unknown>>,
+    traceEvents: s1.traceEvents as unknown as Array<Record<string, unknown>>,
+  });
+
+  const hydrated = normalizeWmsState(mapped, seed);
+  const asn1 = hydrated.asns.find((a) => a.asnNo === 'ASN-20261117-01')!;
+  assert.equal(asn1.workflowStage, 'RECEIVING');
+  assert.equal(asn1.deliveryNoteNo, 'DN-TEST-99');
+  assert.equal(asn1.carrierName, '德邦物流');
+  assert.equal('_asnWorkflow' in (asn1.lines[0] as unknown as Record<string, unknown>), false);
+});
+

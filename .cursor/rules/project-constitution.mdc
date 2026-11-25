@@ -1,0 +1,14 @@
+---
+description: Universal project constitution and Agent Skills router for Cursor IDE
+alwaysApply: true
+---
+
+# Cursor 规则自动加载入口
+
+本仓库以根目录 `AGENTS.md` 与 `.agents/skills/*/SKILL.md` 作为跨 Agent 单一真相源。
+
+在执行任何需求开发、Bug 修复或架构变更前：
+1. 必须遵守 `AGENTS.md` 中的项目架构、业务红线与验收命令。
+2. 按 `AGENTS.md` 中的技能路由表，读取 `.agents/skills/<skill-name>/SKILL.md` 后再修改代码。
+3. 任何涉及扫码/条码录入的 UI 必须统一复用 `src/components/PdaScanField.tsx` 与 `.mes-panel`（遵循 MES 方案 B 视觉规范），并通过 `feedback` 插槽在扫码框正下方就近展示红框错误/成功提示（严禁将报错藏在表单底部），同时接入 `src/utils/pdaScanFocus.ts` 标准扫后焦点与回正逻辑。
+4. 严禁绕过单元测试、类型检查（`npm run lint`）和构建验证（`npm run build`）直接宣布完成。

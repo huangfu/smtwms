@@ -17,9 +17,11 @@ import {
   applyScrap,
   bakeMsdReel,
   buildMaterialKey,
+  classifyScanBucket,
   computeLowStockAlerts,
   computeSmtAnomalies,
   computeWorkOrderKitting,
+  confirmAsnDeliveryArrival,
   consolidateWaveDemand,
   createAsnOrder,
   createCycleCountTask,
@@ -34,14 +36,23 @@ import {
   deleteWarehouse,
   deleteWarehouseBin,
   deleteWarehouseKeeper,
+  deriveAsnWorkflowStage,
+  getAsnLineStageMetrics,
+  getIqcRejectedAsnLines,
+  getPutawayEligibleAsnLines,
   importAsnFromCsv,
+  inspectAsnLineIqc,
+  isAsnLineIqcFullyRejected,
   issueWaveAllocation,
   normalizeWmsState,
   parseBarcodeString,
+  putawayAsnLine,
   saveBarcodeRule,
   saveBomMaster,
   saveLabelTemplate,
   savePrinterConfig,
+  scanAsnReceiving,
+  syncAsnOrderInfo,
   traceByQuery,
   updateCustomer,
   updateMaterialSku,
@@ -1319,6 +1330,284 @@ test('zplEngine supports custom paper dimensions, 600/custom DPI, global X/Y shi
   assert.equal(reTpl.customWidthMm, 85);
   assert.equal(reTpl.elementLayouts?.some((l) => l.key === 'CUSTOM_BC_1'), true);
 });
+
+test('Sequential ASN receiving flow separates receiving registration from post-receipt IQC inspection and qualified putaway', () => {
+  const seed = createSeedData();
+  const asnNo = 'ASN-20261117-01';
+  const initialAsn = seed.asns.find((a) => a.asnNo === asnNo)!;
+  assert.equal(deriveAsnWorkflowStage(initialAsn), 'ASN_REGISTERED');
+  assert.equal(classifyScanBucket(0, 1000), 'UNSCANNED');
+  assert.equal(classifyScanBucket(600, 1000), 'IN_PROGRESS');
+  assert.equal(classifyScanBucket(1000, 1000), 'SCANNED');
+
+  // Step 1-2 -> Step 3: Supplier delivery check-in advances to RECEIVING
+  const { state: s1, asn: a1, stageAdvancedTo: adv1 } = confirmAsnDeliveryArrival(seed, {
+    asnNo,
+    deliveryNoteNo: 'DN-ARROW-261117',
+    carrierName: '顺丰冷链 粤B·6618',
+    operator: '张伟',
+  });
+  assert.equal(adv1, 'RECEIVING');
+  assert.equal(a1.workflowStage, 'RECEIVING');
+  assert.equal(a1.deliveryNoteNo, 'DN-ARROW-261117');
+  assert.ok(a1.arrivedAt);
+
+  // Reject IQC BEFORE receiving registration is complete!
+  assert.throws(
+    () =>
+      inspectAsnLineIqc(s1, {
+        asnNo,
+        lineId: 'ASNL-01',
+        result: 'PASSED',
+        operator: 'IQC专员',
+      }),
+    /尚未完成收料登记/
+  );
+
+  // Reject barcode whose SKU/MPN is not on this ASN checklist
+  assert.throws(
+    () =>
+      scanAsnReceiving(s1, {
+        asnNo,
+        rawBarcode: 'P:UNKNOWN-IC-999|L:LOT01|D:2646|Q:100',
+        operator: '张伟',
+      }),
+    /料号不匹配/
+  );
+
+  // Scan partial carton QR for line 1 (600 / 1000) -> registers qty ONLY (IQC remains PENDING / 0)
+  const scan1 = scanAsnReceiving(s1, {
+    asnNo,
+    rawBarcode: 'P:STM32F407VET6|L:ST2646A1|D:2646|Q:600',
+    operator: '张伟',
+  });
+  assert.equal(scan1.matchedLine.skuCode, 'MAT-IC-001');
+  assert.equal(scan1.addedQty, 600);
+  assert.equal(scan1.matchedLine.receivedQty, 600);
+  assert.equal(scan1.matchedLine.iqcPassedQty, 0);
+  assert.equal(scan1.matchedLine.iqcStatus, 'PENDING');
+  assert.equal(scan1.lineBucket, 'IN_PROGRESS');
+  assert.equal(scan1.stageAdvancedTo, undefined);
+  assert.equal(scan1.asn.workflowStage, 'RECEIVING');
+
+  // Manual fallback when second box has no barcode -> completes line 1 (1000/1000 -> SCANNED 已刷)
+  const scan2 = scanAsnReceiving(scan1.state, {
+    asnNo,
+    manualSkuOrMpn: 'STM32F407VET6',
+    qty: 400,
+    lotNumber: 'ST2646A1',
+    dateCode: '2646',
+    operator: '张伟',
+  });
+  assert.equal(scan2.matchedLine.receivedQty, 1000);
+  assert.equal(scan2.matchedLine.iqcPassedQty, 0);
+  assert.equal(scan2.lineBucket, 'SCANNED');
+  assert.equal(scan2.stageAdvancedTo, undefined);
+
+  // Scan line 2 (500/500) -> all lines 100% registered -> auto-advances to Stage 4 IQC_INSPECTION!
+  const scan3 = scanAsnReceiving(scan2.state, {
+    asnNo,
+    rawBarcode: 'P:BM04B-GHS-TBT|L:JS2645K2|D:2645|Q:500',
+    operator: '张伟',
+  });
+  assert.equal(scan3.matchedLine.skuCode, 'MAT-CON-001');
+  assert.equal(scan3.lineBucket, 'SCANNED');
+  assert.equal(scan3.stageAdvancedTo, 'IQC_INSPECTION');
+  assert.equal(scan3.asn.workflowStage, 'IQC_INSPECTION');
+  assert.ok(scan3.asn.receivingCompletedAt);
+
+  // Reject putaway BEFORE IQC inspection completes!
+  assert.throws(
+    () =>
+      putawayAsnLine(scan3.state, {
+        asnNo,
+        lineId: 'ASNL-01',
+        binCode: 'MSD-01-01',
+        operator: '张伟',
+      }),
+    /尚未完成 IQC 质检放行/
+  );
+
+  // In IQC_INSPECTION stage, both lines start in UNSCANNED (待质检)
+  for (const line of scan3.asn.lines) {
+    assert.equal(getAsnLineStageMetrics(line, 'IQC_INSPECTION').bucket, 'UNSCANNED');
+  }
+
+  // IQC line 1 with split disposition: 800 passed + 200 rejected (quarantined)
+  const iqc1 = inspectAsnLineIqc(scan3.state, {
+    asnNo,
+    lineId: 'ASNL-01',
+    passedQty: 800,
+    rejectedQty: 200,
+    note: '抽检发现200pcs引脚氧化隔离退供',
+    operator: '李质检 (IQC/MSD专员)',
+  });
+  assert.equal(iqc1.passedAdded, 800);
+  assert.equal(iqc1.rejectedAdded, 200);
+  assert.equal(iqc1.matchedLine.iqcPassedQty, 800);
+  assert.equal(iqc1.matchedLine.iqcRejectedQty, 200);
+  assert.equal(iqc1.lineBucket, 'SCANNED');
+  assert.equal(iqc1.stageAdvancedTo, undefined);
+  assert.equal(iqc1.asn.workflowStage, 'IQC_INSPECTION');
+
+  // IQC line 2 full pass (500/500) -> all IQC done -> auto-advances to PUTAWAY!
+  const iqc2 = inspectAsnLineIqc(iqc1.state, {
+    asnNo,
+    rawBarcode: 'P:BM04B-GHS-TBT|L:JS2645K2|D:2645|Q:500',
+    result: 'PASSED',
+    operator: '李质检 (IQC/MSD专员)',
+  });
+  assert.equal(iqc2.passedAdded, 500);
+  assert.equal(iqc2.rejectedAdded, 0);
+  assert.equal(iqc2.stageAdvancedTo, 'PUTAWAY');
+  assert.equal(iqc2.asn.workflowStage, 'PUTAWAY');
+  assert.ok(iqc2.asn.iqcCompletedAt);
+
+  // In PUTAWAY stage, line 1 target is ONLY the 800 IQC-passed qty (NOT 1000!)
+  assert.equal(getAsnLineStageMetrics(iqc2.asn.lines[0], 'PUTAWAY').targetQty, 800);
+  assert.equal(getAsnLineStageMetrics(iqc2.asn.lines[0], 'PUTAWAY').bucket, 'UNSCANNED');
+
+  // Putaway line 1 -> creates real IN_STOCK reel with qty=800 (clamped to iqcPassedQty)
+  const put1 = putawayAsnLine(iqc2.state, {
+    asnNo,
+    rawBarcode: 'P:STM32F407VET6|L:ST2646A1|D:2646|Q:1000',
+    binCode: 'MSD-01-01',
+    operator: '张伟',
+  });
+  assert.equal(put1.reel.status, 'IN_STOCK');
+  assert.equal(put1.reel.qty, 800);
+  assert.equal(put1.reel.binCode, 'MSD-01-01');
+  assert.equal(put1.stageAdvancedTo, undefined);
+  assert.equal(getAsnLineStageMetrics(put1.matchedLine, 'PUTAWAY').bucket, 'SCANNED');
+
+  // Putaway line 2 -> all qualified lines put away -> auto-advances through INVENTORY_UPDATED -> INFO_SYNCED & COMPLETED
+  const put2 = putawayAsnLine(put1.state, {
+    asnNo,
+    lineId: 'ASNL-02',
+    binCode: 'B-02-01',
+    operator: '张伟',
+  });
+  assert.equal(put2.reel.status, 'IN_STOCK');
+  assert.equal(put2.reel.qty, 500);
+  assert.equal(put2.reel.binCode, 'B-02-01');
+  assert.equal(put2.stageAdvancedTo, 'INFO_SYNCED');
+  assert.equal(put2.asn.workflowStage, 'INFO_SYNCED');
+  assert.equal(put2.asn.status, 'COMPLETED');
+  assert.ok(put2.asn.putawayCompletedAt);
+  assert.ok(put2.asn.inventoryUpdatedAt);
+  assert.ok(put2.asn.syncedAt);
+  assert.ok(put2.asn.syncRefNo);
+
+  // Manual re-sync updates sync reference cleanly
+  const resynced = syncAsnOrderInfo(put2.state, {
+    asnNo,
+    syncChannel: 'SAP ERP / MES 双向回传',
+  });
+  assert.equal(resynced.asn.syncChannel, 'SAP ERP / MES 双向回传');
+  assert.equal(resynced.asn.workflowStage, 'INFO_SYNCED');
+});
+
+test('100% IQC-rejected ASN lines are excluded from putaway queue and blocked from inbound/putaway', () => {
+  const seed = createSeedData();
+  const asnNo = 'ASN-20261117-01';
+
+  // Arrive and fully register both lines (STM32F407VET6 1000 + BM04B-GHS-TBT 500)
+  const { state: s1 } = confirmAsnDeliveryArrival(seed, { asnNo, operator: '张伟' });
+  const r1 = scanAsnReceiving(s1, {
+    asnNo,
+    rawBarcode: 'P:STM32F407VET6|L:ST2646A1|D:2646|Q:1000',
+    operator: '张伟',
+  });
+  const r2 = scanAsnReceiving(r1.state, {
+    asnNo,
+    rawBarcode: 'P:BM04B-GHS-TBT|L:JS2645K2|D:2645|Q:500',
+    operator: '张伟',
+  });
+  assert.equal(r2.asn.workflowStage, 'IQC_INSPECTION');
+
+  // IQC: Line 1 passes (1000), Line 2 (BM04B-GHS-TBT) is 100% FAILED (0 passed, 500 rejected)
+  const q1 = inspectAsnLineIqc(r2.state, {
+    asnNo,
+    lineId: 'ASNL-01',
+    result: 'PASSED',
+    qty: 1000,
+    operator: '李质检',
+  });
+  const q2 = inspectAsnLineIqc(q1.state, {
+    asnNo,
+    lineId: 'ASNL-02',
+    result: 'FAILED',
+    qty: 500,
+    note: '连接器针脚变形全批退供',
+    operator: '李质检',
+  });
+  assert.equal(q2.asn.workflowStage, 'PUTAWAY');
+
+  const line1 = q2.asn.lines.find((l) => l.lineId === 'ASNL-01')!;
+  const line2 = q2.asn.lines.find((l) => l.lineId === 'ASNL-02')!;
+
+  assert.equal(isAsnLineIqcFullyRejected(line1), false);
+  assert.equal(isAsnLineIqcFullyRejected(line2), true);
+
+  // Putaway queue MUST contain ONLY line 1 (BM04B-GHS-TBT is strictly excluded!)
+  const eligible = getPutawayEligibleAsnLines(q2.asn);
+  assert.deepEqual(
+    eligible.map((l) => l.mpn),
+    ['STM32F407VET6']
+  );
+  assert.deepEqual(
+    getIqcRejectedAsnLines(q2.asn).map((l) => l.mpn),
+    ['BM04B-GHS-TBT']
+  );
+
+  // Stage metrics must flag line 2 as excludedFromPutaway and NEVER as SCANNED
+  const line2Metrics = getAsnLineStageMetrics(line2, 'PUTAWAY');
+  assert.equal(line2Metrics.excludedFromPutaway, true);
+  assert.notEqual(line2Metrics.bucket, 'SCANNED');
+
+  // Attempting to put away or quick-inbound the IQC-rejected line MUST throw
+  assert.throws(
+    () =>
+      putawayAsnLine(q2.state, {
+        asnNo,
+        lineId: 'ASNL-02',
+        binCode: 'B-02-01',
+        operator: '张伟',
+      }),
+    /IQC不良拦截/
+  );
+  assert.throws(
+    () =>
+      applyInbound(q2.state, {
+        skuCode: 'MAT-CON-001',
+        lotNumber: 'JS2645K2',
+        dateCode: '2645',
+        supplier: q2.asn.supplierName,
+        qty: 500,
+        binCode: 'B-02-01',
+        asnNo,
+        asnLineId: 'ASNL-02',
+        operator: '张伟',
+      }),
+    /IQC不良拦截/
+  );
+
+  // Putting away ONLY line 1 completes the entire ASN with ZERO stock added for rejected line 2
+  const put1 = putawayAsnLine(q2.state, {
+    asnNo,
+    lineId: 'ASNL-01',
+    binCode: 'MSD-01-01',
+    operator: '张伟',
+  });
+  assert.equal(put1.stageAdvancedTo, 'INFO_SYNCED');
+  assert.equal(put1.asn.status, 'COMPLETED');
+  const asnReels = put1.state.reels.filter((r) => r.asnNo === asnNo);
+  assert.equal(asnReels.length, 1);
+  assert.equal(asnReels[0].mpn, 'STM32F407VET6');
+  assert.equal(asnReels[0].qty, 1000);
+});
+
+
 
 
 

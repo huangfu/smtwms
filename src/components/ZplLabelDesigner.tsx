@@ -582,9 +582,9 @@ export function ZplLabelDesigner({
 
           {/* Custom Paper Dimensions (when CUSTOM selected) */}
           {paperSize === 'CUSTOM' && (
-            <div className="grid grid-cols-2 gap-2.5 rounded-md border border-sky-200 bg-sky-50/50 p-2.5">
+            <div className="grid grid-cols-2 gap-2.5 rounded-md border border-teal-200 bg-teal-50/50 p-2.5">
               <div>
-                <label htmlFor="tpl-custom-w" className="block text-[11px] font-medium text-sky-900">
+                <label htmlFor="tpl-custom-w" className="block text-[11px] font-medium text-teal-900">
                   自定义纸宽 (20-200 mm)
                 </label>
                 <input
@@ -597,11 +597,11 @@ export function ZplLabelDesigner({
                   onChange={(e) =>
                     setCustomWidthMm(Math.max(20, Math.min(200, Number(e.target.value) || 20)))
                   }
-                  className="mt-1 w-full rounded border border-sky-300 bg-white px-2 py-1 font-mono text-xs tabular-nums"
+                  className="mt-1 w-full rounded border border-teal-300 bg-white px-2 py-1 font-mono text-xs tabular-nums"
                 />
               </div>
               <div>
-                <label htmlFor="tpl-custom-h" className="block text-[11px] font-medium text-sky-900">
+                <label htmlFor="tpl-custom-h" className="block text-[11px] font-medium text-teal-900">
                   自定义纸高 (10-200 mm)
                 </label>
                 <input
@@ -614,7 +614,7 @@ export function ZplLabelDesigner({
                   onChange={(e) =>
                     setCustomHeightMm(Math.max(10, Math.min(200, Number(e.target.value) || 10)))
                   }
-                  className="mt-1 w-full rounded border border-sky-300 bg-white px-2 py-1 font-mono text-xs tabular-nums"
+                  className="mt-1 w-full rounded border border-teal-300 bg-white px-2 py-1 font-mono text-xs tabular-nums"
                 />
               </div>
             </div>
@@ -644,7 +644,7 @@ export function ZplLabelDesigner({
             </div>
             {dpiPreset === 'CUSTOM' ? (
               <div>
-                <label htmlFor="tpl-custom-dpi" className="block text-xs font-medium text-sky-900">
+                <label htmlFor="tpl-custom-dpi" className="block text-xs font-medium text-teal-900">
                   精度值 (150-600)
                 </label>
                 <input
@@ -655,7 +655,7 @@ export function ZplLabelDesigner({
                   max={600}
                   value={dpi}
                   onChange={(e) => setDpi(normalizeDpi(Number(e.target.value)))}
-                  className="mt-1 w-full rounded-md border border-sky-300 bg-white px-2 py-1.5 font-mono text-xs tabular-nums"
+                  className="mt-1 w-full rounded-md border border-teal-300 bg-white px-2 py-1.5 font-mono text-xs tabular-nums"
                 />
               </div>
             ) : (
@@ -720,10 +720,10 @@ export function ZplLabelDesigner({
           <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-                <Move className="h-3.5 w-3.5 text-sky-700" />
+                <Move className="h-3.5 w-3.5 text-teal-700" />
                 整体列印 X / Y 移转（全局偏移校准）
               </div>
-              <span className="font-mono text-[10px] text-sky-800 tabular-nums">
+              <span className="font-mono text-[10px] text-teal-800 tabular-nums">
                 {shiftInfo.summary}
               </span>
             </div>
@@ -817,7 +817,7 @@ export function ZplLabelDesigner({
                   <button
                     type="button"
                     onClick={applyOffsetToAllElements}
-                    className="rounded border border-sky-300 bg-sky-50 px-1.5 py-1 text-[10px] font-medium text-sky-800 hover:bg-sky-100 whitespace-nowrap"
+                    className="rounded border border-teal-300 bg-teal-50 px-1.5 py-1 text-[10px] font-medium text-teal-800 hover:bg-teal-100 whitespace-nowrap"
                   >
                     固化到坐标
                   </button>
@@ -833,7 +833,7 @@ export function ZplLabelDesigner({
               onClick={() => setZplMode('VISUAL')}
               className={`inline-flex items-center justify-center gap-1.5 rounded px-2.5 py-1.5 font-medium transition-colors ${
                 zplMode === 'VISUAL'
-                  ? 'bg-white text-sky-800 shadow-sm'
+                  ? 'bg-white text-teal-800 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -845,7 +845,7 @@ export function ZplLabelDesigner({
               onClick={() => setZplMode('CUSTOM_ZPL')}
               className={`inline-flex items-center justify-center gap-1.5 rounded px-2.5 py-1.5 font-medium transition-colors ${
                 zplMode === 'CUSTOM_ZPL'
-                  ? 'bg-white text-sky-800 shadow-sm'
+                  ? 'bg-white text-teal-800 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -862,7 +862,7 @@ export function ZplLabelDesigner({
                   <button
                     type="button"
                     onClick={() => handleAddCustomElement('TEXT')}
-                    className="inline-flex items-center gap-1 rounded border border-sky-300 bg-white px-2 py-1 text-[11px] font-medium text-sky-800 hover:bg-sky-50 whitespace-nowrap"
+                    className="inline-flex items-center gap-1 rounded border border-teal-300 bg-white px-2 py-1 text-[11px] font-medium text-teal-800 hover:bg-teal-50 whitespace-nowrap"
                   >
                     <Type className="h-3 w-3" />
                     + 新增文本
@@ -870,7 +870,7 @@ export function ZplLabelDesigner({
                   <button
                     type="button"
                     onClick={() => handleAddCustomElement('BARCODE')}
-                    className="inline-flex items-center gap-1 rounded border border-sky-300 bg-white px-2 py-1 text-[11px] font-medium text-sky-800 hover:bg-sky-50 whitespace-nowrap"
+                    className="inline-flex items-center gap-1 rounded border border-teal-300 bg-white px-2 py-1 text-[11px] font-medium text-teal-800 hover:bg-teal-50 whitespace-nowrap"
                   >
                     <Barcode className="h-3 w-3" />
                     + 新增条码
@@ -922,7 +922,7 @@ export function ZplLabelDesigner({
                       <div
                         key={el.key}
                         className={`flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs ${
-                          isSel ? 'bg-sky-50 text-sky-900' : 'hover:bg-slate-50'
+                          isSel ? 'bg-teal-50 text-teal-900' : 'hover:bg-slate-50'
                         }`}
                       >
                         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -972,13 +972,13 @@ export function ZplLabelDesigner({
               {selectedEl && (
                 <div
                   data-testid="element-inspector"
-                  className="space-y-2.5 rounded-md border border-sky-200 bg-sky-50/35 p-3"
+                  className="space-y-2.5 rounded-md border border-teal-200 bg-teal-50/35 p-3"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-200/80 pb-2">
-                    <div className="text-xs font-semibold text-sky-950">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-teal-200/80 pb-2">
+                    <div className="text-xs font-semibold text-teal-950">
                       属性编辑：{getElementDisplayName(selectedEl)}
                     </div>
-                    <div className="font-mono text-[10px] text-sky-800 tabular-nums">
+                    <div className="font-mono text-[10px] text-teal-800 tabular-nums">
                       ^FO{mmToDots(selectedEl.xMm, safeDpi)},{mmToDots(selectedEl.yMm, safeDpi)}
                     </div>
                   </div>
@@ -1152,7 +1152,7 @@ export function ZplLabelDesigner({
 
                   {/* TEXT & Built-in Text Styling */}
                   {!selectedIsBarcode && selectedKind !== 'BOX' && (
-                    <div className="space-y-2 border-t border-sky-200/70 pt-2">
+                    <div className="space-y-2 border-t border-teal-200/70 pt-2">
                       <div>
                         <label htmlFor="el-content-tpl" className="block text-[10px] font-medium text-slate-700">
                           {selectedKind === 'TEXT'
@@ -1184,7 +1184,7 @@ export function ZplLabelDesigner({
                                   contentTemplate: `${selectedEl.contentTemplate ?? ''}${v.token}`,
                                 })
                               }
-                              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[9px] text-slate-700 hover:border-sky-400 hover:text-sky-800"
+                              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[9px] text-slate-700 hover:border-teal-400 hover:text-teal-800"
                             >
                               {v.token}
                             </button>
@@ -1253,7 +1253,7 @@ export function ZplLabelDesigner({
 
                   {/* BARCODE + HRI Position & Style Controls */}
                   {selectedIsBarcode && (
-                    <div className="space-y-2.5 border-t border-sky-200/70 pt-2">
+                    <div className="space-y-2.5 border-t border-teal-200/70 pt-2">
                       <div className="grid grid-cols-3 gap-2">
                         <div>
                           <label className="block text-[10px] font-medium text-slate-700">
@@ -1322,7 +1322,7 @@ export function ZplLabelDesigner({
                               onClick={() =>
                                 updateLayoutField(selectedEl.key, { barcodeContent: tok })
                               }
-                              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[9px] text-slate-700 hover:border-sky-400 hover:text-sky-800"
+                              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[9px] text-slate-700 hover:border-teal-400 hover:text-teal-800"
                             >
                               设为 {tok}
                             </button>
@@ -1344,7 +1344,7 @@ export function ZplLabelDesigner({
                                 hriPosition: e.target.value as BarcodeHriPosition,
                               })
                             }
-                            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-sky-900"
+                            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-teal-900"
                           >
                             <option value="BOTTOM">条码正下方</option>
                             <option value="TOP">条码正上方</option>
@@ -1509,7 +1509,7 @@ export function ZplLabelDesigner({
                 <button
                   type="button"
                   onClick={buildSkeletonZplFromVisual}
-                  className="rounded border border-sky-300 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800 hover:bg-sky-100 whitespace-nowrap"
+                  className="rounded border border-teal-300 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-800 hover:bg-teal-100 whitespace-nowrap"
                 >
                   从可视化生成 ZPL 骨架
                 </button>
@@ -1523,7 +1523,7 @@ export function ZplLabelDesigner({
                     onClick={() =>
                       setCustomZpl((prev) => `${prev}${prev.endsWith('\n') || !prev ? '' : ' '}${p.token}`)
                     }
-                    className="rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-700 hover:border-sky-400 hover:text-sky-800"
+                    className="rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-700 hover:border-teal-400 hover:text-teal-800"
                   >
                     {p.token}
                   </button>
@@ -1540,7 +1540,7 @@ export function ZplLabelDesigner({
             </div>
           )}
 
-          <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-sky-800">
+          <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-teal-800">
             <input
               type="checkbox"
               checked={isDefault}
@@ -1562,7 +1562,7 @@ export function ZplLabelDesigner({
 
           <button
             type="submit"
-            className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800 whitespace-nowrap"
+            className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white hover:bg-teal-800 whitespace-nowrap"
           >
             {editingTplId ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
             {editingTplId ? '保存 ZPL 模板修改' : '保存 ZPL 标签模板'}
@@ -1618,9 +1618,9 @@ export function ZplLabelDesigner({
               <button
                 type="button"
                 onClick={() => setShowZplCode((v) => !v)}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-800 hover:text-sky-700"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-800 hover:text-teal-700"
               >
-                <Code2 className="h-3.5 w-3.5 text-sky-700" />
+                <Code2 className="h-3.5 w-3.5 text-teal-700" />
                 ZPL II 编译指令流 ({liveZpl.split('\n').length} 行)
               </button>
               <div className="inline-flex items-center gap-2">
@@ -1680,7 +1680,7 @@ export function ZplLabelDesigner({
                 <div
                   key={tpl.templateId}
                   className={`px-5 py-4 text-xs ${
-                    editingTplId === tpl.templateId ? 'bg-sky-50/40' : ''
+                    editingTplId === tpl.templateId ? 'bg-teal-50/40' : ''
                   }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1718,7 +1718,7 @@ export function ZplLabelDesigner({
                       <button
                         type="button"
                         onClick={() => startEditTpl(tpl)}
-                        className="inline-flex items-center gap-1 font-medium text-sky-700 hover:text-sky-900"
+                        className="inline-flex items-center gap-1 font-medium text-teal-700 hover:text-teal-900"
                       >
                         <Pencil className="h-3 w-3" />
                         编辑/设计

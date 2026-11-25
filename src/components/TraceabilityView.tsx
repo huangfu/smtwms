@@ -1,5 +1,5 @@
-import { Barcode, GitBranch, Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Barcode, GitBranch } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReelItem, WmsState } from '../types/wms';
 import {
   ACTION_META,
@@ -8,7 +8,9 @@ import {
   REEL_STATUS_LABEL,
   WORK_ORDER_STATUS_LABEL,
 } from '../utils/formatters';
-import { traceByQuery } from '../utils/wmsLogic';
+import { completePdaScan, focusScanInputOnMount } from '../utils/pdaScanFocus';
+import { parseBarcodeString, traceByQuery } from '../utils/wmsLogic';
+import { PdaScanField } from './PdaScanField';
 
 interface TraceabilityViewProps {
   state: WmsState;
@@ -21,66 +23,124 @@ export function TraceabilityView({
   initialQuery,
   onOpenLabel,
 }: TraceabilityViewProps) {
-  const [query, setQuery] = useState(initialQuery);
+  const [scanInput, setScanInput] = useState('');
+  const [activeQuery, setActiveQuery] = useState(initialQuery);
+  const [traceError, setTraceError] = useState<string | null>(null);
+  const traceScanInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setQuery(initialQuery);
+    setActiveQuery(initialQuery);
+    setScanInput('');
+    setTraceError(null);
+    focusScanInputOnMount(traceScanInputRef);
   }, [initialQuery]);
 
+  const executeTraceLookup = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    setTraceError(null);
+    const parsed = parseBarcodeString(trimmed, state.barcodeRules);
+    const token =
+      trimmed.includes('|') || trimmed.includes(';') || trimmed.includes(',') || /^UID:/i.test(trimmed)
+        ? parsed.reelId || parsed.mpn || parsed.lotNumber || trimmed
+        : trimmed;
+    const matched = traceByQuery(state, token);
+    const hasHit =
+      matched.events.length > 0 ||
+      matched.matchedReels.length > 0 ||
+      matched.matchedWorkOrders.length > 0;
+    if (!hasHit) {
+      setTraceError(`未查询到匹配「${token}」的追溯记录，请核对后直接再次扫码`);
+      completePdaScan({
+        currentValue: raw,
+        setValue: setScanInput,
+        inputRef: traceScanInputRef,
+        outcome: 'error',
+      });
+      return;
+    }
+    setActiveQuery(token);
+    completePdaScan({
+      currentValue: raw,
+      setValue: setScanInput,
+      inputRef: traceScanInputRef,
+      outcome: 'success',
+    });
+  };
+
+  const handleTraceScanSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    executeTraceLookup(scanInput);
+  };
+
+  const selectDirectQuery = (target: string) => {
+    setTraceError(null);
+    setActiveQuery(target);
+    completePdaScan({
+      currentValue: scanInput,
+      setValue: setScanInput,
+      inputRef: traceScanInputRef,
+      outcome: 'success',
+    });
+  };
+
+  const query = activeQuery;
   const result = traceByQuery(state, query);
 
   return (
     <div className="space-y-6">
-      {/* Search / Scanner Bar */}
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="text-base font-semibold text-slate-900">
-          全流程双向扫码追溯中心 (正查流向 · 反查源头)
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          支持扫描或输入料盘 UID、IPC-1782 复合二维码、原厂批次 Lot、物料 MPN、生产工单号或库位号
-        </p>
-
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="全程扫码追溯查询框"
-              placeholder="扫描条码或输入 UID (如 RL261010-010) / Lot / 工单号 (WO-...) / MPN..."
-              className="w-full rounded-md border border-slate-300 py-2.5 pl-10 pr-4 font-mono text-sm text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-sky-600 focus:outline-none"
-            />
-          </div>
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery('')}
-              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0"
-            >
-              显示全部流水
-            </button>
-          )}
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-slate-500">快速检索示例:</span>
-          {['RL261010-010', 'RL261005-011', 'WO-20261115-01', 'STM32F407VET6'].map((sample) => (
-            <button
-              key={sample}
-              type="button"
-              onClick={() => setQuery(sample)}
-              className="rounded border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-xs text-sky-700 hover:bg-sky-50"
-            >
-              {sample}
-            </button>
-          ))}
-        </div>
+      {/* Canonical Barcode Scanner Bar */}
+      <section className="mes-panel p-4 sm:p-6">
+        <form onSubmit={handleTraceScanSubmit}>
+          <PdaScanField
+            id="trace-scan-query"
+            inputRef={traceScanInputRef}
+            title="全流程双向扫码追溯中心 (正查流向 · 反查源头)"
+            subtitle="扫料盘 UID / 复合码 / Lot / 工单号回车即查，命中后自动清空待下次扫描"
+            ariaLabel="全程扫码追溯查询框"
+            value={scanInput}
+            onChange={(val) => {
+              setScanInput(val);
+              if (traceError) setTraceError(null);
+            }}
+            placeholder="扫描条码或输入 UID (如 RL261010-010) / Lot / 工单号 (WO-...) / MPN..."
+            actionLabel="扫码追溯"
+            actionDisabled={!scanInput.trim()}
+            feedback={traceError ? { type: 'error', message: traceError } : null}
+            helperHint={
+              query ? (
+                <span className="font-mono text-xs text-teal-800">
+                  当前追溯目标：<strong>{query}</strong>（命中 {result.matchedReels.length} 盘 ·{' '}
+                  {result.events.length} 条流水）
+                </span>
+              ) : undefined
+            }
+            quickItemsLabel="快速检索示例："
+            quickItems={['RL261010-010', 'RL261005-011', 'WO-20261115-01', 'STM32F407VET6'].map(
+              (sample) => ({
+                key: sample,
+                label: sample,
+                onClick: () => selectDirectQuery(sample),
+              })
+            )}
+            trailingControl={
+              query ? (
+                <button
+                  type="button"
+                  onClick={() => selectDirectQuery('')}
+                  className="min-h-[36px] rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap"
+                >
+                  显示全部流水
+                </button>
+              ) : undefined
+            }
+          />
+        </form>
       </section>
 
       {/* Matched Reels Summary */}
       {query && result.matchedReels.length > 0 && (
-        <section className="rounded-lg border border-slate-200 bg-white">
+        <section className="mes-panel">
           <div className="border-b border-slate-200 px-5 py-3.5">
             <h3 className="text-sm font-semibold text-slate-900">
               匹配料盘档案与父子分拆谱系 ({result.matchedReels.length})
@@ -108,7 +168,7 @@ export function TraceabilityView({
                       {reel.parentReelId && (
                         <>
                           <span className="text-slate-300">·</span>
-                          <span className="inline-flex items-center gap-1 font-mono text-sky-700">
+                          <span className="inline-flex items-center gap-1 font-mono text-teal-700">
                             <GitBranch className="h-3 w-3" />
                             母盘 {reel.parentReelId}
                           </span>
@@ -136,7 +196,7 @@ export function TraceabilityView({
                       <div className="text-slate-500">初始 / 已发 / 当前余量</div>
                       <div className="mt-0.5 text-sm font-semibold text-slate-900">
                         {reel.initialQty.toLocaleString()} / {reel.issuedQty.toLocaleString()} /{' '}
-                        <span className="text-sky-700">{reel.qty.toLocaleString()}</span>
+                        <span className="text-teal-700">{reel.qty.toLocaleString()}</span>
                       </div>
                     </div>
                     <button
@@ -157,7 +217,7 @@ export function TraceabilityView({
 
       {/* Matched Work Orders */}
       {query && result.matchedWorkOrders.length > 0 && (
-        <section className="rounded-lg border border-slate-200 bg-white">
+        <section className="mes-panel">
           <div className="border-b border-slate-200 px-5 py-3.5">
             <h3 className="text-sm font-semibold text-slate-900">
               关联工单用料明细 ({result.matchedWorkOrders.length})
@@ -178,7 +238,7 @@ export function TraceabilityView({
                       {wo.lineName} · 计划 {wo.targetQty} PCS
                     </span>
                   </div>
-                  <span className="font-medium text-sky-700">
+                  <span className="font-medium text-teal-700">
                     {WORK_ORDER_STATUS_LABEL[wo.status]}
                   </span>
                 </div>
@@ -198,7 +258,7 @@ export function TraceabilityView({
       )}
 
       {/* Trace Timeline Ledger */}
-      <section className="rounded-lg border border-slate-200 bg-white">
+      <section className="mes-panel">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <h3 className="text-sm font-semibold text-slate-900">
@@ -212,7 +272,7 @@ export function TraceabilityView({
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+            <thead className="border-b border-slate-200 bg-[#f8fafb] text-slate-500">
               <tr>
                 <th className="px-5 py-2.5 font-medium">时间戳</th>
                 <th className="px-4 py-2.5 font-medium">操作环节</th>
@@ -245,8 +305,8 @@ export function TraceabilityView({
                       <td className="px-4 py-3 whitespace-nowrap">
                         <button
                           type="button"
-                          onClick={() => setQuery(evt.reelId)}
-                          className="font-mono font-medium text-sky-700 hover:underline"
+                          onClick={() => selectDirectQuery(evt.reelId)}
+                          className="font-mono font-medium text-teal-700 hover:underline"
                         >
                           {evt.reelId}
                         </button>
@@ -279,8 +339,8 @@ export function TraceabilityView({
                         {evt.workOrderId && (
                           <button
                             type="button"
-                            onClick={() => setQuery(evt.workOrderId!)}
-                            className="text-[11px] text-sky-700 hover:underline"
+                            onClick={() => selectDirectQuery(evt.workOrderId!)}
+                            className="text-[11px] text-teal-700 hover:underline"
                           >
                             {evt.workOrderId}
                           </button>

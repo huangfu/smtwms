@@ -313,7 +313,7 @@ export function WarehouseMasterPanel({
             }}
             className={`rounded-md px-3.5 py-1.5 text-xs whitespace-nowrap shrink-0 ${
               subSection === item.id
-                ? 'bg-white font-semibold text-sky-800 shadow-sm border border-slate-200/80'
+                ? 'bg-white font-semibold text-teal-800 shadow-sm border border-slate-200/80'
                 : 'font-medium text-slate-600 hover:text-slate-900 border border-transparent'
             }`}
           >
@@ -430,7 +430,7 @@ export function WarehouseMasterPanel({
 
               <button
                 type="submit"
-                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
+                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white hover:bg-teal-800"
               >
                 {editingWhCode ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                 {editingWhCode ? '保存仓库修改' : '保存仓库信息'}
@@ -471,7 +471,7 @@ export function WarehouseMasterPanel({
                       <tr
                         key={wh.warehouseCode}
                         className={`hover:bg-slate-50 ${
-                          editingWhCode === wh.warehouseCode ? 'bg-sky-50/40' : ''
+                          editingWhCode === wh.warehouseCode ? 'bg-teal-50/40' : ''
                         }`}
                       >
                         <td className="px-4 py-3">
@@ -511,7 +511,7 @@ export function WarehouseMasterPanel({
                               <button
                                 type="button"
                                 onClick={() => startEditWh(wh)}
-                                className="font-medium text-sky-700 hover:text-sky-900"
+                                className="font-medium text-teal-700 hover:text-teal-900"
                               >
                                 编辑
                               </button>
@@ -667,7 +667,7 @@ export function WarehouseMasterPanel({
 
               <button
                 type="submit"
-                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
+                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white hover:bg-teal-800"
               >
                 {editingBinCode ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                 {editingBinCode ? '保存库位修改' : '新增库位'}
@@ -720,7 +720,7 @@ export function WarehouseMasterPanel({
                       <tr
                         key={b.binCode}
                         className={`hover:bg-slate-50 ${
-                          editingBinCode === b.binCode ? 'bg-sky-50/40' : ''
+                          editingBinCode === b.binCode ? 'bg-teal-50/40' : ''
                         }`}
                       >
                         <td className="px-4 py-3 font-mono font-semibold text-slate-900 whitespace-nowrap">
@@ -760,7 +760,7 @@ export function WarehouseMasterPanel({
                               <button
                                 type="button"
                                 onClick={() => startEditBin(b)}
-                                className="font-medium text-sky-700 hover:text-sky-900"
+                                className="font-medium text-teal-700 hover:text-teal-900"
                               >
                                 编辑
                               </button>
@@ -912,7 +912,7 @@ export function WarehouseMasterPanel({
 
               <button
                 type="submit"
-                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
+                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white hover:bg-teal-800"
               >
                 {editingKeeperId ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                 {editingKeeperId ? '保存管理员修改' : '保存管理员档案'}
@@ -946,7 +946,7 @@ export function WarehouseMasterPanel({
                       <tr
                         key={k.keeperId}
                         className={`hover:bg-slate-50 ${
-                          editingKeeperId === k.keeperId ? 'bg-sky-50/40' : ''
+                          editingKeeperId === k.keeperId ? 'bg-teal-50/40' : ''
                         }`}
                       >
                         <td className="px-4 py-3">
@@ -984,7 +984,7 @@ export function WarehouseMasterPanel({
                               <button
                                 type="button"
                                 onClick={() => startEditKeeper(k)}
-                                className="font-medium text-sky-700 hover:text-sky-900"
+                                className="font-medium text-teal-700 hover:text-teal-900"
                               >
                                 编辑
                               </button>

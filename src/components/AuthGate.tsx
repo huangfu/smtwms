@@ -89,11 +89,11 @@ export function AuthGate() {
   const displayedError = localError || authError;
 
   return (
-    <div className="flex min-h-screen flex-col-reverse bg-slate-50 text-slate-900 lg:flex-row">
-      {/* Left Industrial Brand Rail */}
-      <section className="relative flex flex-col justify-between bg-slate-900 px-6 py-8 text-white lg:w-[46%] lg:px-14 lg:py-14">
-        <div className="hidden items-center gap-3 lg:flex">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-600 text-white">
+    <div className="flex min-h-screen flex-col-reverse bg-[#f3f5f7] text-slate-900 lg:flex-row">
+      {/* Left Deep Carbon Industrial Brand Rail */}
+      <section className="mes-carbon-grid relative flex flex-col justify-between border-t border-white/[0.08] px-6 py-9 text-slate-100 lg:w-[46%] lg:border-r lg:border-t-0 lg:px-14 lg:py-14">
+        <div className="hidden items-center gap-3.5 lg:flex">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-600 text-white shadow-xs">
             <Cpu className="h-5 w-5" />
           </div>
           <div>
@@ -101,63 +101,67 @@ export function AuthGate() {
               SMT-WMS 智能电子仓
             </div>
             <div className="text-xs text-slate-400">
-              电子制造料盘全生命周期仓储管理系统
+              电子制造料盘全生命周期仓储执行系统
             </div>
           </div>
         </div>
 
-        <div className="space-y-5 lg:my-0">
-          <div className="text-xs font-semibold uppercase tracking-widest text-sky-400">
-            ENTERPRISE SMT MANUFACTURING
+        <div className="space-y-6 lg:my-0">
+          <div className="text-xs font-medium tracking-wide text-teal-400">
+            精益电子制造 · MES / WMS 车间仓储中台
           </div>
-          <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-white lg:text-4xl">
+          <h1
+            className="font-display max-w-lg text-2xl font-bold leading-tight tracking-tight text-white lg:text-[38px] lg:leading-[1.18]"
+            style={{ textWrap: 'balance' }}
+          >
             精准管控每一盘电子物料与 MSD 车间寿命
           </h1>
-          <p className="max-w-md text-sm leading-relaxed text-slate-300">
-            覆盖 ASN 采购收料、UID 唯一码与 ZPL 可视化条码打印、FIFO 波次配料发料、
-            产线补退料、湿敏烘烤预警及全链路批次正反向追溯。
+          <p className="max-w-md text-sm leading-relaxed text-slate-300/90">
+            覆盖 ASN 采购收料与 IQC 质检防呆、UID 唯一码与 Zebra ZPL 可视化打印、
+            FIFO 波次配料发料、产线补退料及全链路批次正反向追溯。
           </p>
 
-          <dl className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-3 lg:gap-4 lg:pt-4">
-            <div className="rounded-lg border border-slate-800 bg-slate-800/50 p-3.5">
-              <dt className="flex items-center gap-1.5 text-xs font-medium text-sky-400">
-                <ScanBarcode className="h-3.5 w-3.5" />
-                UID &amp; ZPL
+          <dl className="grid grid-cols-1 divide-y divide-white/[0.08] border-y border-white/[0.08] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="py-4 sm:pr-4">
+              <dt className="flex items-center gap-1.5 text-xs font-semibold text-teal-300">
+                <ScanBarcode className="h-3.5 w-3.5 shrink-0" />
+                UID 与 ZPL 直打
               </dt>
-              <dd className="mt-1.5 text-xs text-slate-300">
-                可视化热敏标签设计与 Zebra 指令直打
+              <dd className="mt-1.5 text-xs leading-relaxed text-slate-400">
+                可视化热敏标签设计与斑马打印机指令直出
               </dd>
             </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-800/50 p-3.5">
-              <dt className="flex items-center gap-1.5 text-xs font-medium text-sky-400">
-                <Layers className="h-3.5 w-3.5" />
-                FIFO &amp; BOM
+            <div className="py-4 sm:px-4">
+              <dt className="flex items-center gap-1.5 text-xs font-semibold text-teal-300">
+                <Layers className="h-3.5 w-3.5 shrink-0" />
+                FIFO 与 BOM 齐套
               </dt>
-              <dd className="mt-1.5 text-xs text-slate-300">
-                按客户产权与替代料规则自动锁定波次
+              <dd className="mt-1.5 text-xs leading-relaxed text-slate-400">
+                按客户产权、周期与替代料规则自动锁盘发料
               </dd>
             </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-800/50 p-3.5">
-              <dt className="flex items-center gap-1.5 text-xs font-medium text-sky-400">
-                <ShieldCheck className="h-3.5 w-3.5" />
+            <div className="py-4 sm:pl-4">
+              <dt className="flex items-center gap-1.5 text-xs font-semibold text-teal-300">
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
                 MSD 防潮闭环
               </dt>
-              <dd className="mt-1.5 text-xs text-slate-300">
-                拆封暴露计时预警与烘烤复位全记录
+              <dd className="mt-1.5 text-xs leading-relaxed text-slate-400">
+                J-STD-033 暴露计时预警与烘烤复位留痕
               </dd>
             </div>
           </dl>
         </div>
 
-        <div className="mt-6 text-xs text-slate-500 lg:mt-0">
-          SMT 电子制造仓储作业平台 · 身份认证访问控制
+        <div className="mt-8 flex items-center justify-between gap-4 border-t border-white/[0.08] pt-5 text-xs text-slate-500 lg:mt-0">
+          <span>SMT 电子制造仓储作业平台</span>
+          <span className="font-mono text-[11px] text-slate-400">PC 管理端 · PDA 手持终端</span>
         </div>
       </section>
 
       {/* Right Sign-In / Register Panel */}
       <main className="flex flex-1 flex-col items-center justify-center px-5 py-8 lg:px-16 lg:py-12">
         <div className="mb-5 flex w-full max-w-md items-center gap-3 lg:hidden">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-700 text-white">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#11161e] text-teal-400">
             <Cpu className="h-5 w-5" />
           </div>
           <div>
@@ -165,20 +169,20 @@ export function AuthGate() {
               SMT-WMS 智能电子仓
             </div>
             <div className="text-xs text-slate-500">
-              电子制造料盘全生命周期仓储管理系统
+              电子制造料盘全生命周期仓储执行系统
             </div>
           </div>
         </div>
 
-        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-7 shadow-sm lg:p-8">
+        <div className="mes-panel w-full max-w-md rounded-xl p-7 lg:p-8">
           <div className="space-y-1.5">
             <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900">
               {mode === 'login' ? '登录仓储工作台' : '注册自定义账号'}
             </h2>
             <p className="text-xs leading-relaxed text-slate-500">
               {mode === 'login'
-                ? '支持自定义工号/账号密码登录，或直接使用 Google 账号进入专属 SMT 仓储工作空间。'
-                : '创建您的专属工号或自定义账号，注册后将自动为您初始化标准 SMT 仓储数据。'}
+                ? '支持工号密码或 Google 账号登录您的 SMT 仓储工作空间。'
+                : '创建专属工号账号，注册后自动初始化标准 SMT 仓储数据。'}
             </p>
           </div>
 
@@ -186,16 +190,16 @@ export function AuthGate() {
           <div
             role="tablist"
             aria-label="登录方式切换"
-            className="mt-5 grid grid-cols-2 rounded-lg bg-slate-100 p-1"
+            className="mt-5 grid grid-cols-2 rounded-lg border border-slate-200/80 bg-slate-100/90 p-1"
           >
             <button
               type="button"
               role="tab"
               aria-selected={mode === 'login'}
               onClick={() => switchMode('login')}
-              className={`rounded-md py-2 text-xs font-semibold transition-colors ${
+              className={`rounded-md py-2 text-xs font-semibold transition-all duration-150 ${
                 mode === 'login'
-                  ? 'bg-white text-slate-900 shadow-xs'
+                  ? 'bg-white text-teal-800 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -206,9 +210,9 @@ export function AuthGate() {
               role="tab"
               aria-selected={mode === 'register'}
               onClick={() => switchMode('register')}
-              className={`rounded-md py-2 text-xs font-semibold transition-colors ${
+              className={`rounded-md py-2 text-xs font-semibold transition-all duration-150 ${
                 mode === 'register'
-                  ? 'bg-white text-slate-900 shadow-xs'
+                  ? 'bg-white text-teal-800 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -242,7 +246,7 @@ export function AuthGate() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="例如：admin、smt_op01 或邮箱"
-                  className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-600 focus:outline-none focus:ring-1 focus:ring-sky-600"
+                  className="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
                 />
               </div>
             </div>
@@ -263,7 +267,7 @@ export function AuthGate() {
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="例如：张主管 / SMT白班仓管"
-                    className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-600 focus:outline-none focus:ring-1 focus:ring-sky-600"
+                    className="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
                   />
                 </div>
               </div>
@@ -285,7 +289,7 @@ export function AuthGate() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="至少 6 位字符"
-                  className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-600 focus:outline-none focus:ring-1 focus:ring-sky-600"
+                  className="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-9 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
                 />
                 <button
                   type="button"
@@ -319,7 +323,7 @@ export function AuthGate() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="请再次输入密码"
-                    className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-600 focus:outline-none focus:ring-1 focus:ring-sky-600"
+                    className="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
                   />
                 </div>
               </div>
@@ -328,7 +332,7 @@ export function AuthGate() {
             <button
               type="submit"
               disabled={signingIn}
-              className="mt-1 flex w-full items-center justify-center rounded-lg bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-1 flex w-full items-center justify-center rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {signingIn
                 ? '正在处理...'
@@ -348,7 +352,7 @@ export function AuthGate() {
             type="button"
             onClick={signInWithGoogle}
             disabled={signingIn}
-            className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <svg
               className="h-4 w-4 shrink-0 text-slate-700"

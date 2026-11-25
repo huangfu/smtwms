@@ -332,7 +332,7 @@ export function BarcodeTemplatePanel({
 
             <button
               type="submit"
-              className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800 whitespace-nowrap"
+              className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white hover:bg-teal-800 whitespace-nowrap"
             >
               {editingRuleId ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
               {editingRuleId ? '保存条码规则修改' : '保存供应商条码规则'}
@@ -350,7 +350,7 @@ export function BarcodeTemplatePanel({
           <div className="border-b border-slate-200 bg-slate-50 p-4 space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-                <ScanBarcode className="h-4 w-4 text-sky-700" />
+                <ScanBarcode className="h-4 w-4 text-teal-700" />
                 实时条码规则解析测试台
               </div>
               <select
@@ -377,7 +377,7 @@ export function BarcodeTemplatePanel({
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 rounded border border-slate-200 bg-white p-2.5 font-mono text-[11px]">
               <div>
                 <span className="text-slate-400">命中规则: </span>
-                <span className="font-semibold text-sky-700">
+                <span className="font-semibold text-teal-700">
                   {parsedPreview.matchedRuleName || 'IPC-1782默认'}
                 </span>
               </div>
@@ -423,7 +423,7 @@ export function BarcodeTemplatePanel({
                     <tr
                       key={rule.ruleId}
                       className={`hover:bg-slate-50 ${
-                        editingRuleId === rule.ruleId ? 'bg-sky-50/40' : ''
+                        editingRuleId === rule.ruleId ? 'bg-teal-50/40' : ''
                       }`}
                     >
                       <td className="px-4 py-2.5">
@@ -476,14 +476,14 @@ export function BarcodeTemplatePanel({
                                 setTestSupplier(rule.supplierCode);
                                 setTestInput(rule.sampleBarcode);
                               }}
-                              className="font-medium text-slate-600 hover:text-sky-700"
+                              className="font-medium text-slate-600 hover:text-teal-700"
                             >
                               测试
                             </button>
                             <button
                               type="button"
                               onClick={() => startEditRule(rule)}
-                              className="font-medium text-sky-700 hover:text-sky-900"
+                              className="font-medium text-teal-700 hover:text-teal-900"
                             >
                               编辑
                             </button>

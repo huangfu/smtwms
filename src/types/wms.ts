@@ -280,12 +280,33 @@ export interface BomMaster {
 
 export type AsnStatus = 'PENDING' | 'PARTIAL' | 'COMPLETED' | 'CANCELLED';
 
+export type AsnWorkflowStage =
+  | 'SUPPLIER_DELIVERY'
+  | 'ASN_REGISTERED'
+  | 'RECEIVING'
+  | 'IQC_INSPECTION'
+  | 'PUTAWAY'
+  | 'INVENTORY_UPDATED'
+  | 'INFO_SYNCED';
+
+export type ScanTabBucket = 'SCANNED' | 'IN_PROGRESS' | 'UNSCANNED';
+
+export type AsnIqcStatus = 'PENDING' | 'PASSED' | 'FAILED';
+
 export interface AsnLine {
   lineId: string;
   skuCode: string;
   mpn: string;
   expectedQty: number;
   receivedQty: number;
+  iqcPassedQty?: number;
+  iqcRejectedQty?: number;
+  iqcStatus?: AsnIqcStatus;
+  iqcNote?: string;
+  putawayQty?: number;
+  putawayReelIds?: string[];
+  scanCount?: number;
+  lastScannedAt?: string;
   lotNumber?: string;
   dateCode?: string;
   targetBin?: string;
@@ -301,6 +322,17 @@ export interface AsnOrder {
   purchaser: string;
   source: 'MANUAL' | 'UPLOAD_CSV';
   status: AsnStatus;
+  workflowStage?: AsnWorkflowStage;
+  deliveryNoteNo?: string;
+  carrierName?: string;
+  arrivedAt?: string;
+  receivingCompletedAt?: string;
+  iqcCompletedAt?: string;
+  putawayCompletedAt?: string;
+  inventoryUpdatedAt?: string;
+  syncedAt?: string;
+  syncChannel?: string;
+  syncRefNo?: string;
   notes?: string;
   createdAt: string;
   lines: AsnLine[];

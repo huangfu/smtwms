@@ -27,6 +27,7 @@ import {
   ALL_WMS_SLICE_KEYS,
   detectChangedSlices,
   mapRowsToPartialWmsState,
+  serializeAsnLinesWithMeta,
   type WmsSliceKey,
 } from './wmsMapper.ts';
 
@@ -316,7 +317,7 @@ async function persistSlicesInTx(
           source: a.source,
           status: a.status,
           notes: a.notes ?? null,
-          lines: a.lines,
+          lines: serializeAsnLinesWithMeta(a),
           createdAt: a.createdAt,
         }))
       );

@@ -1,12 +1,29 @@
-import { KeyRound, LogOut, Menu, Plus, ScanBarcode, UserCircle2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  KeyRound,
+  LayoutGrid,
+  LogOut,
+  Menu,
+  ScanBarcode,
+  UserCircle2,
+} from 'lucide-react';
 import { useState } from 'react';
+import {
+  DEPARTMENT_LIST,
+  DEPARTMENT_META,
+  type DepartmentRole,
+} from '../utils/roleAccess';
 import { NAV_ITEMS, type NavKey } from './Sidebar';
 
 interface TopBarProps {
   activeNav: NavKey;
+  departmentRole: DepartmentRole;
+  onChangeDepartmentRole: (role: DepartmentRole) => void;
+  notifiedIqcCount: number;
+  iqcReleasedPutawayCount: number;
   onOpenMobileMenu: () => void;
+  onSelectNav: (nav: NavKey) => void;
   onQuickScan: (query: string) => void;
-  onQuickInbound: () => void;
   userName?: string | null;
   userEmail?: string | null;
   onOpenChangePassword?: () => void;
@@ -15,9 +32,13 @@ interface TopBarProps {
 
 export function TopBar({
   activeNav,
+  departmentRole,
+  onChangeDepartmentRole,
+  notifiedIqcCount,
+  iqcReleasedPutawayCount,
   onOpenMobileMenu,
+  onSelectNav,
   onQuickScan,
-  onQuickInbound,
   userName,
   userEmail,
   onOpenChangePassword,
@@ -25,6 +46,9 @@ export function TopBar({
 }: TopBarProps) {
   const [scanInput, setScanInput] = useState('');
   const current = NAV_ITEMS.find((n) => n.key === activeNav) ?? NAV_ITEMS[0];
+  const isWarehouseRole = departmentRole === 'WAREHOUSE';
+  const isPdaTaskPage = isWarehouseRole && Boolean(current.isPdaTask);
+  const deptMeta = DEPARTMENT_META[departmentRole];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,22 +60,37 @@ export function TopBar({
   const displayUser = userName || userEmail || '';
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 lg:gap-8 lg:px-6">
-      <div className="flex min-w-0 items-center gap-3">
-        <button
-          type="button"
-          onClick={onOpenMobileMenu}
-          aria-label="打开菜单"
-          className="rounded-md p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200/90 bg-white/95 px-3 backdrop-blur-xs lg:h-16 lg:gap-6 lg:px-6">
+      <div className="flex min-w-0 items-center gap-1.5 sm:gap-2.5">
+        {isPdaTaskPage ? (
+          <button
+            type="button"
+            onClick={() => onSelectNav('pdaHome')}
+            aria-label="返回PDA作业菜单"
+            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50/50 hover:text-teal-800 whitespace-nowrap"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>PDA菜单</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onOpenMobileMenu}
+            aria-label="打开菜单"
+            className="flex min-h-[40px] min-w-[40px] shrink-0 items-center justify-center rounded-md text-slate-700 transition-colors hover:bg-slate-100 lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
+
         <div className="flex min-w-0 items-center gap-2 text-sm text-slate-500">
-          <span className="hidden whitespace-nowrap sm:inline">SMT车间仓</span>
-          <span className="hidden text-slate-300 sm:inline" aria-hidden="true">
+          <span className="hidden whitespace-nowrap text-xs font-semibold text-teal-800 lg:inline">
+            {deptMeta.badge}
+          </span>
+          <span className="hidden text-slate-300 lg:inline" aria-hidden="true">
             /
           </span>
-          <h1 className="truncate font-display text-base font-semibold text-slate-900">
+          <h1 className="truncate font-display text-sm font-semibold text-slate-900 sm:text-base">
             {current.label}
           </h1>
         </div>
@@ -69,31 +108,83 @@ export function TopBar({
             onChange={(e) => setScanInput(e.target.value)}
             aria-label="全局扫码追溯"
             placeholder="扫码枪直扫或输入 UID / Lot / 工单号 回车追溯"
-            className="w-full rounded-md border border-slate-300 bg-slate-50 py-1.5 pl-9 pr-3 font-mono text-xs text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-sky-600 focus:bg-white focus:outline-none"
+            className="w-full rounded-md border border-slate-200 bg-[#f8fafb] py-1.5 pl-9 pr-3 font-mono text-xs text-slate-900 placeholder:font-sans placeholder:text-slate-400 transition-colors focus:border-teal-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/15"
           />
         </div>
         <button
           type="submit"
-          className="shrink-0 whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          className="shrink-0 whitespace-nowrap rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50/40 hover:text-teal-800"
         >
           扫码追溯
         </button>
       </form>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <button
-          type="button"
-          onClick={onQuickInbound}
-          className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-sky-700 px-3.5 py-2 text-xs font-medium text-white hover:bg-sky-800"
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        {/* Compact Mobile Department Switcher so PDA browser can verify 仓库 / IQC / 采购 isolation cleanly */}
+        <div
+          role="group"
+          aria-label="移动端部门切换"
+          className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 p-0.5 lg:hidden"
         >
-          <Plus className="h-3.5 w-3.5" />
-          快速入库
-        </button>
+          {DEPARTMENT_LIST.map((role) => {
+            const meta = DEPARTMENT_META[role];
+            const isSelected = role === departmentRole;
+            const alertDot =
+              (role === 'IQC' && notifiedIqcCount > 0) ||
+              (role === 'WAREHOUSE' && iqcReleasedPutawayCount > 0);
+            return (
+              <button
+                key={role}
+                type="button"
+                aria-label={`切换到${meta.label}`}
+                aria-pressed={isSelected}
+                onClick={() => onChangeDepartmentRole(role)}
+                className={`relative min-h-[34px] rounded px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors ${
+                  isSelected
+                    ? 'bg-teal-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {meta.shortLabel}
+                {alertDot && !isSelected && (
+                  <span
+                    className={`ml-1 inline-block h-1.5 w-1.5 rounded-full align-middle ${
+                      role === 'IQC' ? 'bg-amber-500' : 'bg-emerald-500'
+                    }`}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {isPdaTaskPage && (
+          <button
+            type="button"
+            onClick={onOpenMobileMenu}
+            aria-label="打开完整菜单"
+            className="hidden min-h-[40px] min-w-[40px] items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 sm:flex lg:hidden"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+        )}
+
+        {isWarehouseRole && activeNav !== 'pdaHome' && !isPdaTaskPage && (
+          <button
+            type="button"
+            onClick={() => onSelectNav('pdaHome')}
+            className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-teal-700 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-teal-800"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            <span>PDA作业</span>
+          </button>
+        )}
 
         {displayUser && (
-          <div className="hidden items-center gap-1.5 border-l border-slate-200 pl-2.5 text-xs text-slate-600 xl:flex">
-            <UserCircle2 className="h-4 w-4 shrink-0 text-slate-400" />
-            <span className="max-w-[140px] truncate" title={userEmail || displayUser}>
+          <div className="hidden items-center gap-1.5 border-l border-slate-200 pl-3 text-xs text-slate-600 xl:flex">
+            <UserCircle2 className="h-4 w-4 shrink-0 text-teal-700/80" />
+            <span className="max-w-[140px] truncate font-medium text-slate-700" title={userEmail || displayUser}>
               {displayUser}
             </span>
           </div>
@@ -105,7 +196,7 @@ export function TopBar({
             onClick={onOpenChangePassword}
             aria-label="修改密码"
             title="修改密码"
-            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            className="hidden min-h-[38px] min-w-[38px] shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 sm:inline-flex sm:px-2.5"
           >
             <KeyRound className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">改密</span>
@@ -118,7 +209,7 @@ export function TopBar({
             onClick={onSignOut}
             aria-label="退出登录"
             title="退出登录"
-            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            className="inline-flex min-h-[38px] min-w-[38px] shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 sm:px-2.5"
           >
             <LogOut className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">退出</span>

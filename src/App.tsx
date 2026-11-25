@@ -4,8 +4,9 @@ import { BarcodeLabelModal } from './components/BarcodeLabelModal';
 import { BomMasterView } from './components/BomMasterView';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { DashboardView } from './components/DashboardView';
-import { InboundView } from './components/InboundView';
+import { InboundView, type InboundPageMode } from './components/InboundView';
 import { InventoryMasterView } from './components/InventoryMasterView';
+import { PdaLauncherView } from './components/PdaLauncherView';
 import { ReplenishReturnView } from './components/ReplenishReturnView';
 import { ScrapCountView } from './components/ScrapCountView';
 import { Sidebar, type NavKey } from './components/Sidebar';
@@ -15,16 +16,48 @@ import { WavePickView } from './components/WavePickView';
 import { useAuth } from './context/AuthContext';
 import { wmsApi } from './services/wmsApi';
 import type { AsnOrder, ReelItem, WmsState } from './types/wms';
+import {
+  getCrossDepartmentQueueCounts,
+  resolveNavForRole,
+  type DepartmentRole,
+} from './utils/roleAccess';
+
+const DEPT_STORAGE_KEY = 'smt_wms_department_role';
+
+function loadInitialDepartmentRole(): DepartmentRole {
+  if (typeof window === 'undefined') return 'WAREHOUSE';
+  const stored = window.localStorage.getItem(DEPT_STORAGE_KEY);
+  if (stored === 'WAREHOUSE' || stored === 'IQC' || stored === 'PROCUREMENT') {
+    return stored;
+  }
+  return 'WAREHOUSE';
+}
+
+const INBOUND_MODES: InboundPageMode[] = [
+  'asnArrival',
+  'asnReceive',
+  'asnIqc',
+  'asnPutaway',
+  'asnPlan',
+  'quickInbound',
+];
 
 export default function App() {
   const { user, loading: authLoading, changePassword, signOut } = useAuth();
   const [state, setState] = useState<WmsState | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activeNav, setActiveNav] = useState<NavKey>('dashboard');
+  const [departmentRole, setDepartmentRole] = useState<DepartmentRole>(loadInitialDepartmentRole);
+  const [activeNav, setActiveNav] = useState<NavKey>(() => {
+    const initialRole = loadInitialDepartmentRole();
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+    return resolveNavForRole(initialRole, isMobile ? 'pdaHome' : 'dashboard', isMobile);
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [traceQuery, setTraceQuery] = useState('');
   const [inboundPrefillSku, setInboundPrefillSku] = useState<string | undefined>(undefined);
+  const [selectedAsnNo, setSelectedAsnNo] = useState('');
+  const [stageTransitionNotice, setStageTransitionNotice] = useState<string | null>(null);
   const [labelReel, setLabelReel] = useState<ReelItem | null>(null);
   const [changePwdOpen, setChangePwdOpen] = useState(false);
 
@@ -53,14 +86,46 @@ export default function App() {
     fetchState();
   }, [user, fetchState]);
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeNav]);
+
+  const handleChangeDepartmentRole = (nextRole: DepartmentRole) => {
+    setDepartmentRole(nextRole);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(DEPT_STORAGE_KEY, nextRole);
+    }
+    setStageTransitionNotice(null);
+    setSelectedAsnNo('');
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+    setActiveNav((prev) => resolveNavForRole(nextRole, prev, isMobile));
+  };
+
+  const handleSelectNav = (nav: NavKey) => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+    setStageTransitionNotice(null);
+    setActiveNav(resolveNavForRole(departmentRole, nav, isMobile));
+  };
+
+  const handleAdvanceStagePage = (nextNav: NavKey, asnNo: string, notice: string) => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+    const safeNav = resolveNavForRole(departmentRole, nextNav, isMobile);
+    setSelectedAsnNo(asnNo);
+    setStageTransitionNotice(notice || null);
+    setActiveNav(safeNav);
+  };
+
   const handleInspectTrace = (query: string) => {
     setTraceQuery(query);
+    setStageTransitionNotice(null);
     setActiveNav('trace');
   };
 
   const handleGoInboundWithSku = (skuCode: string) => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
     setInboundPrefillSku(skuCode);
-    setActiveNav('inbound');
+    setStageTransitionNotice(null);
+    setActiveNav(resolveNavForRole(departmentRole, 'quickInbound', isMobile));
   };
 
   const handleBakeMsd = async (reelId: string) => {
@@ -74,12 +139,17 @@ export default function App() {
   const handleResetDemo = async () => {
     const res = await wmsApi.resetDemo();
     setState(res.state);
+    setSelectedAsnNo('');
+    setStageTransitionNotice(null);
   };
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-sm font-medium text-slate-600">正在初始化工作台...</div>
+      <div className="flex min-h-screen items-center justify-center bg-[#f3f5f7]">
+        <div className="flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-xs">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-teal-700 border-t-transparent" />
+          正在初始化 MES 仓储工作台...
+        </div>
       </div>
     );
   }
@@ -90,31 +160,36 @@ export default function App() {
 
   if (loading && !state) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-sm font-medium text-slate-600">正在加载 SMT-WMS 仓储数据...</div>
+      <div className="flex min-h-screen items-center justify-center bg-[#f3f5f7]">
+        <div className="flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-xs">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-teal-700 border-t-transparent" />
+          正在加载 SMT-WMS 仓储数据...
+        </div>
       </div>
     );
   }
 
   if (loadError || !state) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 p-4">
-        <div className="text-sm font-semibold text-red-700">{loadError || '数据加载异常'}</div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={fetchState}
-            className="rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
-          >
-            重试连接
-          </button>
-          <button
-            type="button"
-            onClick={signOut}
-            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            切换账号
-          </button>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#f3f5f7] p-4">
+        <div className="rounded-lg border border-red-200 bg-white px-6 py-5 text-center shadow-xs">
+          <div className="text-sm font-semibold text-red-700">{loadError || '数据加载异常'}</div>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={fetchState}
+              className="rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-teal-800"
+            >
+              重试连接
+            </button>
+            <button
+              type="button"
+              onClick={signOut}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              切换账号
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -123,12 +198,18 @@ export default function App() {
   const msdAlertCount = state.reels.filter(
     (r) => r.msdState === 'BAKING_REQUIRED' && r.status !== 'SCRAPPED' && r.status !== 'DEPLETED'
   ).length;
+  const queueCounts = getCrossDepartmentQueueCounts(state.asns);
+
+  const isInboundMode = INBOUND_MODES.includes(activeNav as InboundPageMode);
 
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-900">
+    <div className="flex min-h-screen bg-[#f3f5f7] text-slate-900">
       <Sidebar
         active={activeNav}
-        onSelect={setActiveNav}
+        departmentRole={departmentRole}
+        onChangeDepartmentRole={handleChangeDepartmentRole}
+        queueCounts={queueCounts}
+        onSelect={handleSelectNav}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
         msdAlertCount={msdAlertCount}
@@ -137,9 +218,13 @@ export default function App() {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
           activeNav={activeNav}
+          departmentRole={departmentRole}
+          onChangeDepartmentRole={handleChangeDepartmentRole}
+          notifiedIqcCount={queueCounts.notifiedIqcCount}
+          iqcReleasedPutawayCount={queueCounts.iqcReleasedPutawayCount}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
+          onSelectNav={handleSelectNav}
           onQuickScan={handleInspectTrace}
-          onQuickInbound={() => setActiveNav('inbound')}
           userName={user.displayName || user.username}
           userEmail={user.username ? `@${user.username}` : user.email}
           onOpenChangePassword={
@@ -148,12 +233,16 @@ export default function App() {
           onSignOut={signOut}
         />
 
-        <main className="flex-1 p-4 lg:p-6">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6">
           <div className="mx-auto max-w-[1400px]">
+            {activeNav === 'pdaHome' && (
+              <PdaLauncherView state={state} onSelectNav={handleSelectNav} />
+            )}
+
             {activeNav === 'dashboard' && (
               <DashboardView
                 state={state}
-                onNavigate={setActiveNav}
+                onNavigate={handleSelectNav}
                 onGoInboundWithSku={handleGoInboundWithSku}
                 onQuickInbound={async (payload) => {
                   const res = await wmsApi.inbound(payload);
@@ -172,9 +261,16 @@ export default function App() {
               />
             )}
 
-            {activeNav === 'inbound' && (
+            {isInboundMode && (
               <InboundView
+                pageMode={activeNav as InboundPageMode}
                 state={state}
+                selectedAsnNo={selectedAsnNo}
+                onSelectAsnNo={setSelectedAsnNo}
+                transitionNotice={stageTransitionNotice}
+                onClearTransitionNotice={() => setStageTransitionNotice(null)}
+                onAdvanceStagePage={handleAdvanceStagePage}
+                onNavigate={handleSelectNav}
                 initialSkuCode={inboundPrefillSku}
                 onInbound={async (payload) => {
                   const res = await wmsApi.inbound(payload);
@@ -195,14 +291,43 @@ export default function App() {
                   const res = await wmsApi.cancelAsn(asnNo);
                   setState(res.state);
                 }}
+                onArriveAsn={async (asnNo, payload) => {
+                  const res = await wmsApi.arriveAsn(asnNo, payload);
+                  setState(res.state);
+                  return res.payload;
+                }}
+                onScanAsnReceive={async (asnNo, payload) => {
+                  const res = await wmsApi.scanAsnReceive(asnNo, payload);
+                  setState(res.state);
+                  return res.payload;
+                }}
+                onInspectAsnIqc={async (asnNo, payload) => {
+                  const res = await wmsApi.inspectAsnIqc(asnNo, payload);
+                  setState(res.state);
+                  return res.payload;
+                }}
+                onPutawayAsnLine={async (asnNo, payload) => {
+                  const res = await wmsApi.putawayAsnLine(asnNo, payload);
+                  setState(res.state);
+                  return res.payload;
+                }}
+                onSyncAsnInfo={async (asnNo, payload) => {
+                  const res = await wmsApi.syncAsnInfo(asnNo, payload);
+                  setState(res.state);
+                  return res.payload.asn;
+                }}
                 onOpenLabel={setLabelReel}
                 onInspectTrace={handleInspectTrace}
               />
             )}
 
-            {activeNav === 'wave' && (
+            {(activeNav === 'wavePlan' ||
+              activeNav === 'wavePick' ||
+              activeNav === 'generalOutbound') && (
               <WavePickView
+                pageMode={activeNav}
                 state={state}
+                onNavigate={handleSelectNav}
                 onCreateWave={async (payload) => {
                   const res = await wmsApi.createWave(payload);
                   setState(res.state);
@@ -219,8 +344,9 @@ export default function App() {
               />
             )}
 
-            {activeNav === 'replenish' && (
+            {(activeNav === 'replenish' || activeNav === 'returnStock') && (
               <ReplenishReturnView
+                pageMode={activeNav}
                 state={state}
                 onReplenish={async (payload) => {
                   const res = await wmsApi.replenish(payload);
@@ -235,9 +361,13 @@ export default function App() {
               />
             )}
 
-            {activeNav === 'scrapCount' && (
+            {(activeNav === 'scrap' ||
+              activeNav === 'countPlan' ||
+              activeNav === 'cycleCount') && (
               <ScrapCountView
+                pageMode={activeNav}
                 state={state}
+                onNavigate={handleSelectNav}
                 onScrap={async (payload) => {
                   const res = await wmsApi.scrap(payload);
                   setState(res.state);

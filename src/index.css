@@ -5,12 +5,25 @@
     --font-display: 'Plus Jakarta Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     --font-sans: 'DM Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+    /* MES Scheme B: Deep Carbon Rail + Light Industrial Workspace + Marine Teal */
+    --mes-rail-bg: #11161e;
+    --mes-rail-surface: #1b2330;
+    --mes-rail-border: rgba(255, 255, 255, 0.08);
+    --mes-canvas: #f3f5f7;
+    --mes-surface: #ffffff;
+    --mes-surface-subtle: #f8fafb;
+    --mes-border: #e2e8f0;
+    --mes-accent: #0f766e;
+    --mes-accent-hover: #115e59;
   }
 
   body {
     font-family: var(--font-sans);
-    background-color: #f8fafc;
+    background-color: var(--mes-canvas);
     color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, .font-display {
@@ -25,6 +38,44 @@
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Precision subtle scrollbars for deep carbon sidebar and dense tables */
+  .mes-rail-scroll::-webkit-scrollbar {
+    width: 5px;
+  }
+  .mes-rail-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .mes-rail-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.2);
+    border-radius: 9999px;
+  }
+  .mes-rail-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.35);
+  }
+}
+
+/* Precision engineering grid backdrop for deep carbon auth rail */
+.mes-carbon-grid {
+  background-color: #11161e;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Single-elevation precision industrial surface */
+.mes-panel {
+  background-color: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @media print {
@@ -32,4 +83,3 @@
     display: none !important;
   }
 }
-

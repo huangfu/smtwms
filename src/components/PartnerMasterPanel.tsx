@@ -207,7 +207,7 @@ export function PartnerMasterPanel({
           }}
           className={`rounded-md px-3.5 py-1.5 text-xs whitespace-nowrap shrink-0 ${
             subTab === 'suppliers'
-              ? 'bg-white font-semibold text-sky-800 shadow-sm border border-slate-200/80'
+              ? 'bg-white font-semibold text-teal-800 shadow-sm border border-slate-200/80'
               : 'font-medium text-slate-600 hover:text-slate-900 border border-transparent'
           }`}
         >
@@ -222,7 +222,7 @@ export function PartnerMasterPanel({
           }}
           className={`rounded-md px-3.5 py-1.5 text-xs whitespace-nowrap shrink-0 ${
             subTab === 'customers'
-              ? 'bg-white font-semibold text-sky-800 shadow-sm border border-slate-200/80'
+              ? 'bg-white font-semibold text-teal-800 shadow-sm border border-slate-200/80'
               : 'font-medium text-slate-600 hover:text-slate-900 border border-transparent'
           }`}
         >
@@ -379,7 +379,7 @@ export function PartnerMasterPanel({
 
               <button
                 type="submit"
-                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
+                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white hover:bg-teal-800"
               >
                 {editingSupCode ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                 {editingSupCode ? '保存供应商修改' : '保存供应商档案'}
@@ -412,7 +412,7 @@ export function PartnerMasterPanel({
                       <tr
                         key={s.supplierCode}
                         className={`hover:bg-slate-50 ${
-                          editingSupCode === s.supplierCode ? 'bg-sky-50/40' : ''
+                          editingSupCode === s.supplierCode ? 'bg-teal-50/40' : ''
                         }`}
                       >
                         <td className="px-4 py-3">
@@ -466,7 +466,7 @@ export function PartnerMasterPanel({
                               <button
                                 type="button"
                                 onClick={() => startEditSup(s)}
-                                className="font-medium text-sky-700 hover:text-sky-900"
+                                className="font-medium text-teal-700 hover:text-teal-900"
                               >
                                 编辑
                               </button>
@@ -620,7 +620,7 @@ export function PartnerMasterPanel({
 
               <button
                 type="submit"
-                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
+                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white hover:bg-teal-800"
               >
                 {editingCusCode ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                 {editingCusCode ? '保存客户修改' : '保存客户档案'}
@@ -652,7 +652,7 @@ export function PartnerMasterPanel({
                       <tr
                         key={c.customerCode}
                         className={`hover:bg-slate-50 ${
-                          editingCusCode === c.customerCode ? 'bg-sky-50/40' : ''
+                          editingCusCode === c.customerCode ? 'bg-teal-50/40' : ''
                         }`}
                       >
                         <td className="px-4 py-3">
@@ -690,7 +690,7 @@ export function PartnerMasterPanel({
                               <button
                                 type="button"
                                 onClick={() => startEditCus(c)}
-                                className="font-medium text-sky-700 hover:text-sky-900"
+                                className="font-medium text-teal-700 hover:text-teal-900"
                               >
                                 编辑
                               </button>

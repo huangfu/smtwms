@@ -1,6 +1,8 @@
 import type {
+  AsnIqcStatus,
   AsnLine,
   AsnOrder,
+  AsnWorkflowStage,
   BarcodeRule,
   BomItem,
   BomMaster,
@@ -12,6 +14,7 @@ import type {
   MsdLevel,
   PackagingSpec,
   ReelItem,
+  ScanTabBucket,
   ScrapRecord,
   Supplier,
   TraceEvent,
@@ -245,6 +248,48 @@ export function normalizeWmsState(
         : fallbackPrinter.printSpeed,
   };
 
+  const rawAsns =
+    Array.isArray(raw.asns) && raw.asns.length > 0 ? raw.asns : fallbackSeed.asns;
+  const asns: AsnOrder[] = rawAsns.map((asn) => {
+    const normalizedLines: AsnLine[] = (asn.lines ?? []).map((line) => {
+      const iqcStatus: AsnIqcStatus =
+        line.iqcStatus ?? (asn.status === 'COMPLETED' ? 'PASSED' : 'PENDING');
+      const iqcPassedQty =
+        typeof line.iqcPassedQty === 'number' && Number.isFinite(line.iqcPassedQty)
+          ? line.iqcPassedQty
+          : asn.status === 'COMPLETED' || iqcStatus === 'PASSED'
+            ? line.receivedQty
+            : 0;
+      const iqcRejectedQty =
+        typeof line.iqcRejectedQty === 'number' && Number.isFinite(line.iqcRejectedQty)
+          ? line.iqcRejectedQty
+          : 0;
+      const putawayQty =
+        typeof line.putawayQty === 'number' && Number.isFinite(line.putawayQty)
+          ? line.putawayQty
+          : asn.status === 'COMPLETED'
+            ? iqcPassedQty
+            : 0;
+      return {
+        ...line,
+        iqcPassedQty,
+        iqcRejectedQty,
+        iqcStatus,
+        putawayQty,
+        putawayReelIds: Array.isArray(line.putawayReelIds) ? line.putawayReelIds : [],
+        scanCount: line.scanCount ?? (line.receivedQty > 0 ? 1 : 0),
+      };
+    });
+    const mergedAsn: AsnOrder = {
+      ...asn,
+      lines: normalizedLines,
+    };
+    return {
+      ...mergedAsn,
+      workflowStage: deriveAsnWorkflowStage(mergedAsn),
+    };
+  });
+
   return {
     printerConfig,
     warehouses:
@@ -270,8 +315,7 @@ export function normalizeWmsState(
         : fallbackSeed.barcodeRules,
     labelTemplates,
     boms,
-    asns:
-      Array.isArray(raw.asns) && raw.asns.length > 0 ? raw.asns : fallbackSeed.asns,
+    asns,
     materials,
     bins,
     reels,
@@ -598,11 +642,53 @@ export function applyInbound(
     if (!line) {
       throw new Error(`ASN单 ${asnNo} 中未包含物料 ${material.skuCode}`);
     }
+    if (
+      line.iqcStatus === 'FAILED' ||
+      ((line.iqcRejectedQty ?? 0) > 0 &&
+        (line.iqcPassedQty ?? 0) <= 0 &&
+        line.receivedQty >= line.expectedQty)
+    ) {
+      throw new Error(
+        `IQC不良拦截：ASN ${asnNo} 中物料 ${line.mpn} 已判定不良隔离 (${line.iqcRejectedQty ?? line.receivedQty} PCS)，严禁入库上架`
+      );
+    }
     line.receivedQty += input.qty;
+    line.iqcPassedQty = (line.iqcPassedQty ?? 0) + input.qty;
+    line.iqcStatus = 'PASSED';
+    line.putawayQty = (line.putawayQty ?? 0) + input.qty;
+    line.putawayReelIds = [...(line.putawayReelIds ?? []), reelId];
+    line.scanCount = (line.scanCount ?? 0) + 1;
+    line.lastScannedAt = iso;
+    line.lotNumber = input.lotNumber.trim();
+    line.dateCode = input.dateCode.trim();
+    line.targetBin = input.binCode;
     linkedSupplier = input.supplier.trim() || asn.supplierName;
+    if (!asn.arrivedAt) asn.arrivedAt = iso;
     const allComplete = asn.lines.every((l) => l.receivedQty >= l.expectedQty);
+    const allPutaway = asn.lines.every(
+      (l) => (l.putawayQty ?? 0) >= Math.max(0, l.iqcPassedQty ?? l.receivedQty)
+    );
     const anyReceived = asn.lines.some((l) => l.receivedQty > 0);
-    asn.status = allComplete ? 'COMPLETED' : anyReceived ? 'PARTIAL' : 'PENDING';
+    if (allComplete && allPutaway) {
+      asn.status = 'COMPLETED';
+      asn.workflowStage = 'INFO_SYNCED';
+      asn.iqcCompletedAt = asn.iqcCompletedAt ?? iso;
+      asn.putawayCompletedAt = iso;
+      asn.inventoryUpdatedAt = iso;
+      asn.syncedAt = iso;
+      asn.syncChannel = asn.syncChannel ?? 'ERP/MES 实时回传';
+      asn.syncRefNo = asn.syncRefNo ?? generateId('SYNC', now);
+    } else if (allComplete) {
+      asn.status = 'PARTIAL';
+      asn.workflowStage = 'PUTAWAY';
+      asn.iqcCompletedAt = asn.iqcCompletedAt ?? iso;
+    } else if (anyReceived) {
+      asn.status = 'PARTIAL';
+      asn.workflowStage = 'RECEIVING';
+    } else {
+      asn.status = 'PENDING';
+      asn.workflowStage = asn.workflowStage ?? 'ASN_REGISTERED';
+    }
   }
 
   const ownershipType = material.ownershipType ?? 'SELF_PURCHASED';
@@ -2651,6 +2737,12 @@ export function createAsnOrder(
       mpn: mat.mpn,
       expectedQty: Math.round(line.expectedQty),
       receivedQty: 0,
+      iqcPassedQty: 0,
+      iqcRejectedQty: 0,
+      iqcStatus: 'PENDING',
+      putawayQty: 0,
+      putawayReelIds: [],
+      scanCount: 0,
       lotNumber: line.lotNumber?.trim() || undefined,
       dateCode: line.dateCode?.trim() || undefined,
       targetBin: line.targetBin?.trim() || mat.defaultBin,
@@ -2667,12 +2759,759 @@ export function createAsnOrder(
     purchaser: input.purchaser.trim() || '采购专员',
     source: input.source ?? 'MANUAL',
     status: 'PENDING',
+    workflowStage: 'ASN_REGISTERED',
     notes: input.notes?.trim() || undefined,
     createdAt: now.toISOString(),
     lines,
   };
 
   next.asns.unshift(asn);
+  return { state: next, asn };
+}
+
+const VALID_ASN_STAGES = new Set<AsnWorkflowStage>([
+  'SUPPLIER_DELIVERY',
+  'ASN_REGISTERED',
+  'RECEIVING',
+  'IQC_INSPECTION',
+  'PUTAWAY',
+  'INVENTORY_UPDATED',
+  'INFO_SYNCED',
+]);
+
+export function deriveAsnWorkflowStage(asn: AsnOrder): AsnWorkflowStage {
+  if (asn.workflowStage && VALID_ASN_STAGES.has(asn.workflowStage)) {
+    return asn.workflowStage;
+  }
+  if (asn.status === 'COMPLETED') return 'INFO_SYNCED';
+  const allReceived =
+    asn.lines.length > 0 && asn.lines.every((l) => l.receivedQty >= l.expectedQty);
+  const allIqcDone =
+    allReceived &&
+    asn.lines.every(
+      (l) => (l.iqcPassedQty ?? 0) + (l.iqcRejectedQty ?? 0) >= l.receivedQty
+    );
+  const allPutaway =
+    allIqcDone &&
+    asn.lines.every((l) => (l.putawayQty ?? 0) >= Math.max(0, l.iqcPassedQty ?? 0));
+  if (allPutaway) return asn.syncedAt ? 'INFO_SYNCED' : 'INVENTORY_UPDATED';
+  if (allIqcDone) return 'PUTAWAY';
+  if (allReceived) return 'IQC_INSPECTION';
+  if (asn.arrivedAt || asn.status === 'PARTIAL' || asn.lines.some((l) => l.receivedQty > 0)) {
+    return 'RECEIVING';
+  }
+  return 'ASN_REGISTERED';
+}
+
+export function classifyScanBucket(doneQty: number, targetQty: number): ScanTabBucket {
+  if (doneQty <= 0) return 'UNSCANNED';
+  if (targetQty > 0 && doneQty >= targetQty) return 'SCANNED';
+  return 'IN_PROGRESS';
+}
+
+export function isAsnLineIqcFullyRejected(line: AsnLine): boolean {
+  return (line.iqcRejectedQty ?? 0) > 0 && (line.iqcPassedQty ?? 0) <= 0;
+}
+
+export function getPutawayEligibleAsnLines(asn: AsnOrder): AsnLine[] {
+  return asn.lines.filter((line) => (line.iqcPassedQty ?? 0) > 0);
+}
+
+export function getIqcRejectedAsnLines(asn: AsnOrder): AsnLine[] {
+  return asn.lines.filter((line) => (line.iqcRejectedQty ?? 0) > 0);
+}
+
+export function getAsnLineStageMetrics(
+  line: AsnLine,
+  stage: AsnWorkflowStage
+): {
+  doneQty: number;
+  targetQty: number;
+  remainingQty: number;
+  bucket: ScanTabBucket;
+  excludedFromPutaway: boolean;
+} {
+  if (stage === 'IQC_INSPECTION') {
+    const targetQty = Math.max(0, line.receivedQty);
+    const doneQty = Math.max(0, (line.iqcPassedQty ?? 0) + (line.iqcRejectedQty ?? 0));
+    const remainingQty = Math.max(0, targetQty - doneQty);
+    return {
+      doneQty,
+      targetQty,
+      remainingQty,
+      bucket: targetQty === 0 ? 'UNSCANNED' : classifyScanBucket(doneQty, targetQty),
+      excludedFromPutaway: false,
+    };
+  }
+  if (stage === 'PUTAWAY' || stage === 'INVENTORY_UPDATED' || stage === 'INFO_SYNCED') {
+    const targetQty = Math.max(0, line.iqcPassedQty ?? 0);
+    const doneQty = Math.max(0, line.putawayQty ?? 0);
+    const remainingQty = Math.max(0, targetQty - doneQty);
+    const excludedFromPutaway = targetQty <= 0;
+    return {
+      doneQty,
+      targetQty,
+      remainingQty,
+      bucket: excludedFromPutaway ? 'UNSCANNED' : classifyScanBucket(doneQty, targetQty),
+      excludedFromPutaway,
+    };
+  }
+  const targetQty = Math.max(0, line.expectedQty);
+  const doneQty = Math.max(0, line.receivedQty);
+  const remainingQty = Math.max(0, targetQty - doneQty);
+  return {
+    doneQty,
+    targetQty,
+    remainingQty,
+    bucket: classifyScanBucket(doneQty, targetQty),
+    excludedFromPutaway: false,
+  };
+}
+
+export function confirmAsnDeliveryArrival(
+  state: WmsState,
+  input: {
+    asnNo: string;
+    deliveryNoteNo?: string;
+    carrierName?: string;
+    operator?: string;
+  },
+  now = new Date()
+): { state: WmsState; asn: AsnOrder; stageAdvancedTo: AsnWorkflowStage } {
+  const next = cloneState(state);
+  const asn = next.asns.find((a) => a.asnNo === input.asnNo.trim());
+  if (!asn) {
+    throw new Error(`ASN收料单不存在: ${input.asnNo}`);
+  }
+  if (asn.status === 'CANCELLED') {
+    throw new Error(`ASN收料单 ${asn.asnNo} 已作废，无法签到收货`);
+  }
+  if (asn.status === 'COMPLETED') {
+    throw new Error(`ASN收料单 ${asn.asnNo} 已全部完结`);
+  }
+  const iso = now.toISOString();
+  asn.deliveryNoteNo =
+    input.deliveryNoteNo?.trim() || asn.deliveryNoteNo || generateId('DN', now);
+  asn.carrierName = input.carrierName?.trim() || asn.carrierName || '供应商直发专车';
+  asn.arrivedAt = asn.arrivedAt || iso;
+  const currentStage = deriveAsnWorkflowStage(asn);
+  if (currentStage === 'SUPPLIER_DELIVERY' || currentStage === 'ASN_REGISTERED') {
+    asn.workflowStage = 'RECEIVING';
+  }
+  return {
+    state: next,
+    asn,
+    stageAdvancedTo: deriveAsnWorkflowStage(asn),
+  };
+}
+
+export interface ScanAsnReceivingInput {
+  asnNo: string;
+  rawBarcode?: string;
+  manualSkuOrMpn?: string;
+  lineId?: string;
+  qty?: number;
+  lotNumber?: string;
+  dateCode?: string;
+  targetBin?: string;
+  operator: string;
+}
+
+export function scanAsnReceiving(
+  state: WmsState,
+  input: ScanAsnReceivingInput,
+  now = new Date()
+): {
+  state: WmsState;
+  asn: AsnOrder;
+  matchedLine: AsnLine;
+  parsed?: ParsedBarcode;
+  addedQty: number;
+  lineBucket: ScanTabBucket;
+  stageAdvancedTo?: AsnWorkflowStage;
+} {
+  const next = cloneState(state);
+  const iso = now.toISOString();
+  const asn = next.asns.find((a) => a.asnNo === input.asnNo.trim());
+  if (!asn) {
+    throw new Error(`ASN收料单不存在: ${input.asnNo}`);
+  }
+  if (asn.status === 'CANCELLED') {
+    throw new Error(`ASN收料单 ${asn.asnNo} 已作废，无法收料`);
+  }
+  if (asn.status === 'COMPLETED') {
+    throw new Error(`ASN收料单 ${asn.asnNo} 已全部完成入库与同步`);
+  }
+
+  const rawTrim = input.rawBarcode?.trim() ?? '';
+  const parsed = rawTrim
+    ? parseBarcodeString(rawTrim, next.barcodeRules, asn.supplierName)
+    : undefined;
+
+  // Match ASN line by explicit lineId, or auto-match by parsed barcode / manual SKU/MPN
+  let matchedLine: AsnLine | undefined;
+  if (input.lineId) {
+    matchedLine = asn.lines.find((l) => l.lineId === input.lineId);
+  }
+  if (!matchedLine) {
+    const candidates = [
+      input.manualSkuOrMpn?.trim(),
+      parsed?.mpn?.trim(),
+      parsed?.reelId?.trim(),
+      rawTrim,
+    ]
+      .filter((v): v is string => Boolean(v))
+      .map((v) => v.toUpperCase());
+
+    const expanded = new Set<string>(candidates);
+    for (const code of candidates) {
+      const mat = next.materials.find(
+        (m) => m.skuCode.toUpperCase() === code || m.mpn.toUpperCase() === code
+      );
+      if (mat) {
+        expanded.add(mat.skuCode.toUpperCase());
+        expanded.add(mat.mpn.toUpperCase());
+      }
+    }
+
+    const matchingLines = asn.lines.filter(
+      (l) =>
+        expanded.has(l.skuCode.toUpperCase()) ||
+        expanded.has(l.mpn.toUpperCase())
+    );
+    matchedLine =
+      matchingLines.find((l) => l.receivedQty < l.expectedQty) ?? matchingLines[0];
+
+    if (!matchedLine) {
+      const displayCode =
+        input.manualSkuOrMpn?.trim() || parsed?.mpn || parsed?.reelId || rawTrim || '空条码';
+      throw new Error(
+        `料号不匹配：当前 ASN (${asn.asnNo}) 清单中不包含「${displayCode}」，请核对送货箱贴或切换对应 ASN`
+      );
+    }
+  }
+
+  const explicitQty =
+    typeof input.qty === 'number' && Number.isFinite(input.qty) && input.qty > 0
+      ? Math.round(input.qty)
+      : undefined;
+  const parsedQty =
+    typeof parsed?.qty === 'number' && Number.isFinite(parsed.qty) && parsed.qty > 0
+      ? Math.round(parsed.qty)
+      : undefined;
+  const addedQty = explicitQty ?? parsedQty;
+
+  if (!addedQty || addedQty <= 0) {
+    throw new Error(
+      `箱码中未解析到数量字段，请在“无码人工录入”中填写本次收货数量 (物料 ${matchedLine.mpn})`
+    );
+  }
+
+  const resolvedLot =
+    input.lotNumber?.trim() || parsed?.lotNumber?.trim() || matchedLine.lotNumber || `LOT-${now.toISOString().slice(2, 10).replace(/-/g, '')}`;
+  const resolvedDc =
+    input.dateCode?.trim() || parsed?.dateCode?.trim() || matchedLine.dateCode || '2646';
+  if (!/^\d{4}$/.test(resolvedDc)) {
+    throw new Error('周期码(DateCode)必须为4位数字，例如 2646');
+  }
+
+  const targetBin = input.targetBin?.trim() || matchedLine.targetBin;
+  if (targetBin && !next.bins.some((b) => b.binCode === targetBin)) {
+    throw new Error(`建议库位不存在: ${targetBin}`);
+  }
+
+  // Receiving registration ONLY registers physical received qty; IQC inspection starts strictly after receipt registration completes.
+  matchedLine.receivedQty += addedQty;
+  matchedLine.iqcPassedQty = matchedLine.iqcPassedQty ?? 0;
+  matchedLine.iqcRejectedQty = matchedLine.iqcRejectedQty ?? 0;
+  if (!matchedLine.iqcStatus) {
+    matchedLine.iqcStatus = 'PENDING';
+  }
+  matchedLine.lotNumber = resolvedLot;
+  matchedLine.dateCode = resolvedDc;
+  if (targetBin) matchedLine.targetBin = targetBin;
+  matchedLine.scanCount = (matchedLine.scanCount ?? 0) + 1;
+  matchedLine.lastScannedAt = iso;
+
+  if (!asn.arrivedAt) asn.arrivedAt = iso;
+  if (!asn.deliveryNoteNo) asn.deliveryNoteNo = generateId('DN', now);
+  asn.status = 'PARTIAL';
+
+  const prevStage = deriveAsnWorkflowStage(asn);
+  const allReceived = asn.lines.every((l) => l.receivedQty >= l.expectedQty);
+  let stageAdvancedTo: AsnWorkflowStage | undefined;
+  if (allReceived) {
+    asn.receivingCompletedAt = iso;
+    asn.workflowStage = 'IQC_INSPECTION';
+    if (prevStage !== 'IQC_INSPECTION') {
+      stageAdvancedTo = 'IQC_INSPECTION';
+    }
+  } else {
+    asn.workflowStage = 'RECEIVING';
+  }
+
+  const lineBucket = classifyScanBucket(matchedLine.receivedQty, matchedLine.expectedQty);
+
+  return {
+    state: next,
+    asn,
+    matchedLine,
+    parsed,
+    addedQty,
+    lineBucket,
+    stageAdvancedTo,
+  };
+}
+
+export interface InspectAsnLineIqcInput {
+  asnNo: string;
+  lineId?: string;
+  rawBarcode?: string;
+  manualSkuOrMpn?: string;
+  result?: 'PASSED' | 'FAILED';
+  qty?: number;
+  passedQty?: number;
+  rejectedQty?: number;
+  note?: string;
+  operator: string;
+}
+
+export function inspectAsnLineIqc(
+  state: WmsState,
+  input: InspectAsnLineIqcInput,
+  now = new Date()
+): {
+  state: WmsState;
+  asn: AsnOrder;
+  matchedLine: AsnLine;
+  passedAdded: number;
+  rejectedAdded: number;
+  lineBucket: ScanTabBucket;
+  stageAdvancedTo?: AsnWorkflowStage;
+} {
+  const next = cloneState(state);
+  const iso = now.toISOString();
+  const asn = next.asns.find((a) => a.asnNo === input.asnNo.trim());
+  if (!asn) {
+    throw new Error(`ASN收料单不存在: ${input.asnNo}`);
+  }
+  if (asn.status === 'CANCELLED') {
+    throw new Error(`ASN收料单 ${asn.asnNo} 已作废，无法执行IQC质检`);
+  }
+  if (asn.status === 'COMPLETED') {
+    throw new Error(`ASN收料单 ${asn.asnNo} 已全部完结`);
+  }
+
+  const allReceived = asn.lines.every((l) => l.receivedQty >= l.expectedQty);
+  if (!allReceived) {
+    throw new Error(
+      `该 ASN (${asn.asnNo}) 尚未完成收料登记，请先在「2. ASN扫码收料」点收齐全部物料后再开始 IQC 质检`
+    );
+  }
+
+  const rawTrim = input.rawBarcode?.trim() ?? '';
+  const parsed = rawTrim
+    ? parseBarcodeString(rawTrim, next.barcodeRules, asn.supplierName)
+    : undefined;
+
+  let matchedLine: AsnLine | undefined;
+  if (input.lineId) {
+    matchedLine = asn.lines.find((l) => l.lineId === input.lineId);
+  }
+  if (!matchedLine) {
+    const candidates = [
+      input.manualSkuOrMpn?.trim(),
+      parsed?.mpn?.trim(),
+      parsed?.reelId?.trim(),
+      rawTrim,
+    ]
+      .filter((v): v is string => Boolean(v))
+      .map((v) => v.toUpperCase());
+
+    const expanded = new Set<string>(candidates);
+    for (const code of candidates) {
+      const mat = next.materials.find(
+        (m) => m.skuCode.toUpperCase() === code || m.mpn.toUpperCase() === code
+      );
+      if (mat) {
+        expanded.add(mat.skuCode.toUpperCase());
+        expanded.add(mat.mpn.toUpperCase());
+      }
+    }
+
+    const matchingLines = asn.lines.filter(
+      (l) =>
+        expanded.has(l.skuCode.toUpperCase()) ||
+        expanded.has(l.mpn.toUpperCase())
+    );
+    matchedLine =
+      matchingLines.find(
+        (l) => (l.iqcPassedQty ?? 0) + (l.iqcRejectedQty ?? 0) < l.receivedQty
+      ) ?? matchingLines[0];
+
+    if (!matchedLine) {
+      const displayCode =
+        input.manualSkuOrMpn?.trim() || parsed?.mpn || parsed?.reelId || rawTrim || '空条码';
+      throw new Error(
+        `料号不匹配：当前 ASN (${asn.asnNo}) 待检清单中不包含「${displayCode}」`
+      );
+    }
+  }
+
+  const alreadyPassed = Math.max(0, matchedLine.iqcPassedQty ?? 0);
+  const alreadyRejected = Math.max(0, matchedLine.iqcRejectedQty ?? 0);
+  const remainingToInspect = Math.max(0, matchedLine.receivedQty - (alreadyPassed + alreadyRejected));
+  if (remainingToInspect <= 0) {
+    throw new Error(`物料 ${matchedLine.mpn} 已全部完成 IQC 质检判定`);
+  }
+
+  let passedAdded = 0;
+  let rejectedAdded = 0;
+  const hasExplicitSplit =
+    typeof input.passedQty === 'number' || typeof input.rejectedQty === 'number';
+  if (hasExplicitSplit) {
+    passedAdded =
+      typeof input.passedQty === 'number' && Number.isFinite(input.passedQty) && input.passedQty >= 0
+        ? Math.round(input.passedQty)
+        : 0;
+    rejectedAdded =
+      typeof input.rejectedQty === 'number' && Number.isFinite(input.rejectedQty) && input.rejectedQty >= 0
+        ? Math.round(input.rejectedQty)
+        : 0;
+  } else {
+    const result = input.result ?? 'PASSED';
+    const rawQty =
+      typeof input.qty === 'number' && Number.isFinite(input.qty) && input.qty > 0
+        ? Math.min(remainingToInspect, Math.round(input.qty))
+        : parsed?.qty && parsed.qty > 0
+          ? Math.min(remainingToInspect, Math.round(parsed.qty))
+          : remainingToInspect;
+    if (result === 'FAILED') {
+      rejectedAdded = rawQty;
+    } else {
+      passedAdded = rawQty;
+    }
+  }
+
+  if (passedAdded + rejectedAdded <= 0) {
+    throw new Error('IQC 检验判定数量（合格 + 不良）必须大于 0');
+  }
+  if (passedAdded + rejectedAdded > remainingToInspect) {
+    throw new Error(
+      `IQC 判定数量 (${passedAdded + rejectedAdded}) 超过待检余量 (${remainingToInspect})`
+    );
+  }
+
+  matchedLine.iqcPassedQty = alreadyPassed + passedAdded;
+  matchedLine.iqcRejectedQty = alreadyRejected + rejectedAdded;
+  matchedLine.iqcStatus =
+    matchedLine.iqcPassedQty > 0
+      ? 'PASSED'
+      : matchedLine.iqcRejectedQty > 0
+        ? 'FAILED'
+        : 'PENDING';
+  if (input.note?.trim()) {
+    matchedLine.iqcNote = input.note.trim();
+  }
+  matchedLine.lastScannedAt = iso;
+
+  const prevStage = deriveAsnWorkflowStage(asn);
+  const allIqcDone = asn.lines.every(
+    (l) => (l.iqcPassedQty ?? 0) + (l.iqcRejectedQty ?? 0) >= l.receivedQty
+  );
+
+  let stageAdvancedTo: AsnWorkflowStage | undefined;
+  if (allIqcDone) {
+    asn.iqcCompletedAt = iso;
+    const totalPassed = asn.lines.reduce((s, l) => s + (l.iqcPassedQty ?? 0), 0);
+    if (totalPassed > 0) {
+      asn.workflowStage = 'PUTAWAY';
+      if (prevStage !== 'PUTAWAY') {
+        stageAdvancedTo = 'PUTAWAY';
+      }
+    } else {
+      // Entire ASN rejected by IQC -> quarantine / return to supplier, no good stock to put away
+      asn.putawayCompletedAt = iso;
+      asn.inventoryUpdatedAt = iso;
+      asn.syncedAt = iso;
+      asn.syncChannel = 'IQC整批拒收退供回传';
+      asn.syncRefNo = generateId('MRB', now);
+      asn.workflowStage = 'INFO_SYNCED';
+      asn.status = 'COMPLETED';
+      stageAdvancedTo = 'INFO_SYNCED';
+    }
+  } else {
+    asn.workflowStage = 'IQC_INSPECTION';
+  }
+
+  const lineBucket = classifyScanBucket(
+    (matchedLine.iqcPassedQty ?? 0) + (matchedLine.iqcRejectedQty ?? 0),
+    matchedLine.receivedQty
+  );
+
+  return {
+    state: next,
+    asn,
+    matchedLine,
+    passedAdded,
+    rejectedAdded,
+    lineBucket,
+    stageAdvancedTo,
+  };
+}
+
+export interface PutawayAsnLineInput {
+  asnNo: string;
+  lineId?: string;
+  rawBarcode?: string;
+  manualSkuOrMpn?: string;
+  binCode?: string;
+  qty?: number;
+  lotNumber?: string;
+  dateCode?: string;
+  reelId?: string;
+  operator: string;
+}
+
+export function putawayAsnLine(
+  state: WmsState,
+  input: PutawayAsnLineInput,
+  now = new Date()
+): {
+  state: WmsState;
+  asn: AsnOrder;
+  matchedLine: AsnLine;
+  reel: ReelItem;
+  event: TraceEvent;
+  stageAdvancedTo?: AsnWorkflowStage;
+} {
+  const next = cloneState(state);
+  const iso = now.toISOString();
+  const asn = next.asns.find((a) => a.asnNo === input.asnNo.trim());
+  if (!asn) {
+    throw new Error(`ASN收料单不存在: ${input.asnNo}`);
+  }
+  if (asn.status === 'CANCELLED') {
+    throw new Error(`ASN收料单 ${asn.asnNo} 已作废`);
+  }
+
+  const allReceived = asn.lines.every((l) => l.receivedQty >= l.expectedQty);
+  const allIqcDone =
+    allReceived &&
+    asn.lines.every(
+      (l) => (l.iqcPassedQty ?? 0) + (l.iqcRejectedQty ?? 0) >= l.receivedQty
+    );
+  if (!allIqcDone) {
+    throw new Error(
+      `ASN (${asn.asnNo}) 尚未完成 IQC 质检放行，请先完成「3. IQC来料质检」后再入库上架`
+    );
+  }
+
+  const rawTrim = input.rawBarcode?.trim() ?? '';
+  const parsed = rawTrim
+    ? parseBarcodeString(rawTrim, next.barcodeRules, asn.supplierName)
+    : undefined;
+
+  let matchedLine: AsnLine | undefined;
+  if (input.lineId) {
+    matchedLine = asn.lines.find((l) => l.lineId === input.lineId);
+  }
+  if (!matchedLine) {
+    const candidates = [
+      input.manualSkuOrMpn?.trim(),
+      parsed?.mpn?.trim(),
+      parsed?.reelId?.trim(),
+      rawTrim,
+    ]
+      .filter((v): v is string => Boolean(v))
+      .map((v) => v.toUpperCase());
+    const expanded = new Set<string>(candidates);
+    for (const code of candidates) {
+      const mat = next.materials.find(
+        (m) => m.skuCode.toUpperCase() === code || m.mpn.toUpperCase() === code
+      );
+      if (mat) {
+        expanded.add(mat.skuCode.toUpperCase());
+        expanded.add(mat.mpn.toUpperCase());
+      }
+    }
+    const matchingLines = asn.lines.filter(
+      (l) =>
+        expanded.has(l.skuCode.toUpperCase()) ||
+        expanded.has(l.mpn.toUpperCase())
+    );
+    matchedLine =
+      matchingLines.find(
+        (l) => (l.putawayQty ?? 0) < Math.max(0, l.iqcPassedQty ?? 0)
+      ) ?? matchingLines[0];
+  }
+
+  if (!matchedLine) {
+    throw new Error(`未在 ASN (${asn.asnNo}) 中找到待上架物料明细`);
+  }
+
+  const material = next.materials.find((m) => m.skuCode === matchedLine!.skuCode);
+  if (!material) {
+    throw new Error(`未找到物料主数据: ${matchedLine.skuCode}`);
+  }
+
+  const iqcPassed = Math.max(0, matchedLine.iqcPassedQty ?? 0);
+  const alreadyPutaway = Math.max(0, matchedLine.putawayQty ?? 0);
+  const remainingToPutaway = Math.max(0, iqcPassed - alreadyPutaway);
+
+  if (iqcPassed <= 0) {
+    if ((matchedLine.iqcRejectedQty ?? 0) > 0) {
+      throw new Error(
+        `IQC不良拦截：物料 ${matchedLine.mpn} 已判定不良隔离 (${matchedLine.iqcRejectedQty} PCS)，严禁入库上架`
+      );
+    }
+    throw new Error(`物料 ${matchedLine.mpn} 无 IQC 合格放行数量，无法入库上架`);
+  }
+  if (remainingToPutaway <= 0) {
+    throw new Error(`物料 ${matchedLine.mpn} 已全部完成入库上架`);
+  }
+
+  const putawayQty =
+    typeof input.qty === 'number' && Number.isFinite(input.qty) && input.qty > 0
+      ? Math.min(remainingToPutaway, Math.round(input.qty))
+      : parsed?.qty && parsed.qty > 0
+        ? Math.min(remainingToPutaway, Math.round(parsed.qty))
+        : remainingToPutaway;
+
+  const binCode = input.binCode?.trim() || matchedLine.targetBin || material.defaultBin;
+  if (!next.bins.some((b) => b.binCode === binCode)) {
+    throw new Error(`目标库位不存在: ${binCode}`);
+  }
+
+  const lotNumber =
+    input.lotNumber?.trim() || parsed?.lotNumber?.trim() || matchedLine.lotNumber || `LOT-${asn.asnNo.slice(-4)}`;
+  const dateCode =
+    input.dateCode?.trim() || parsed?.dateCode?.trim() || matchedLine.dateCode || '2646';
+  if (!/^\d{4}$/.test(dateCode)) {
+    throw new Error('周期码(DateCode)必须为4位数字，例如 2646');
+  }
+
+  const reelId = input.reelId?.trim() || generateId('RL', now);
+  if (next.reels.some((r) => r.reelId === reelId)) {
+    throw new Error(`料盘条码已存在: ${reelId}`);
+  }
+
+  const ownershipType = material.ownershipType ?? 'SELF_PURCHASED';
+  const ownerCode = material.ownerCode ?? 'INTERNAL';
+  const ownerName = material.ownerName ?? '本厂自购';
+  const customerCode =
+    ownershipType === 'CUSTOMER_CONSIGNED'
+      ? ownerCode
+      : (material.customerCode ?? '').trim().toUpperCase();
+  const customerName = customerCode
+    ? material.customerName ??
+      next.customers.find((c) => c.customerCode === customerCode)?.customerName ??
+      customerCode
+    : '通用共享 (不限客户)';
+  const materialKey =
+    material.materialKey ??
+    buildMaterialKey(material.skuCode, ownershipType, ownerCode, customerCode);
+
+  const reel: ReelItem = {
+    reelId,
+    materialKey,
+    skuCode: material.skuCode,
+    mpn: material.mpn,
+    lotNumber,
+    dateCode,
+    supplier: asn.supplierName,
+    ownershipType,
+    ownerCode,
+    ownerName,
+    customerCode,
+    customerName,
+    packagingCode: material.packagingCode,
+    mpq: material.mpq,
+    receiptDocNo: asn.asnNo,
+    asnNo: asn.asnNo,
+    initialQty: putawayQty,
+    qty: putawayQty,
+    issuedQty: 0,
+    binCode,
+    msdLevel: material.msdLevel,
+    msdState: 'SEALED',
+    status: 'IN_STOCK',
+    receivedAt: iso,
+    updatedAt: iso,
+  };
+
+  const event: TraceEvent = {
+    eventId: generateId('EVT', now),
+    timestamp: iso,
+    action: 'INBOUND',
+    reelId: reel.reelId,
+    skuCode: reel.skuCode,
+    mpn: reel.mpn,
+    lotNumber: reel.lotNumber,
+    dateCode: reel.dateCode,
+    qtyDelta: putawayQty,
+    balanceAfter: putawayQty,
+    toBin: binCode,
+    docNo: asn.asnNo,
+    reason: `ASN (${asn.asnNo}) IQC合格放行入库上架并更新库存`,
+    operator: input.operator.trim() || '仓管员',
+  };
+
+  next.reels.unshift(reel);
+  next.traceEvents.unshift(event);
+
+  matchedLine.putawayQty = alreadyPutaway + putawayQty;
+  matchedLine.targetBin = binCode;
+  matchedLine.putawayReelIds = [...(matchedLine.putawayReelIds ?? []), reel.reelId];
+  matchedLine.lastScannedAt = iso;
+
+  const allPutawayDone = asn.lines.every(
+    (l) => (l.putawayQty ?? 0) >= Math.max(0, l.iqcPassedQty ?? 0)
+  );
+
+  let stageAdvancedTo: AsnWorkflowStage | undefined;
+  if (allIqcDone && allPutawayDone) {
+    asn.putawayCompletedAt = iso;
+    asn.inventoryUpdatedAt = iso;
+    asn.syncedAt = iso;
+    asn.syncChannel = 'ERP/MES 实时回传';
+    asn.syncRefNo = generateId('SYNC', now);
+    asn.workflowStage = 'INFO_SYNCED';
+    asn.status = 'COMPLETED';
+    stageAdvancedTo = 'INFO_SYNCED';
+  } else {
+    asn.status = 'PARTIAL';
+    asn.workflowStage = 'PUTAWAY';
+  }
+
+  return {
+    state: next,
+    asn,
+    matchedLine,
+    reel,
+    event,
+    stageAdvancedTo,
+  };
+}
+
+export function syncAsnOrderInfo(
+  state: WmsState,
+  input: { asnNo: string; syncChannel?: string },
+  now = new Date()
+): { state: WmsState; asn: AsnOrder } {
+  const next = cloneState(state);
+  const asn = next.asns.find((a) => a.asnNo === input.asnNo.trim());
+  if (!asn) {
+    throw new Error(`ASN收料单不存在: ${input.asnNo}`);
+  }
+  const iso = now.toISOString();
+  asn.syncedAt = iso;
+  asn.syncChannel = input.syncChannel?.trim() || asn.syncChannel || 'ERP/MES 实时回传';
+  asn.syncRefNo = generateId('SYNC', now);
+  if (asn.status === 'COMPLETED' || deriveAsnWorkflowStage(asn) === 'INVENTORY_UPDATED') {
+    asn.workflowStage = 'INFO_SYNCED';
+    asn.status = 'COMPLETED';
+  }
   return { state: next, asn };
 }
 

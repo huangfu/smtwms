@@ -276,7 +276,7 @@ export function MaterialCatalogPanel({
                   <button
                     type="button"
                     onClick={handleSyncSkuToMpn}
-                    className="inline-flex items-center gap-0.5 text-[11px] font-medium text-sky-700 hover:underline whitespace-nowrap"
+                    className="inline-flex items-center gap-0.5 text-[11px] font-medium text-teal-700 hover:underline whitespace-nowrap"
                   >
                     <RotateCcw className="h-2.5 w-2.5" />
                     同MPN
@@ -406,7 +406,7 @@ export function MaterialCatalogPanel({
                     state.customers.find((c) => c.customerCode === ownerCode)?.customerName ??
                     ownerCode
                   } (仅限该客户工单发料)`}
-                  className="mt-1 w-full rounded border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-medium text-sky-900"
+                  className="mt-1 w-full rounded border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-xs font-medium text-teal-900"
                 />
               ) : (
                 <select
@@ -567,7 +567,7 @@ export function MaterialCatalogPanel({
             </div>
             <button
               type="submit"
-              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-sky-700 px-5 py-2 text-xs font-medium text-white hover:bg-sky-800 whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-teal-700 px-5 py-2 text-xs font-medium text-white hover:bg-teal-800 whitespace-nowrap shrink-0"
             >
               {editingKey ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
               {editingKey ? '保存修改' : '保存至物料归属清单'}
@@ -662,7 +662,7 @@ export function MaterialCatalogPanel({
                 return (
                   <tr
                     key={rowKey}
-                    className={`hover:bg-slate-50 ${editingKey === rowKey ? 'bg-sky-50/40' : ''}`}
+                    className={`hover:bg-slate-50 ${editingKey === rowKey ? 'bg-teal-50/40' : ''}`}
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="font-mono font-semibold text-slate-900">{m.skuCode}</div>
@@ -683,7 +683,7 @@ export function MaterialCatalogPanel({
                     <td className="px-3 py-3 whitespace-nowrap">
                       {effectiveCusCode ? (
                         <div>
-                          <div className="font-medium text-sky-800">{effectiveCusName}</div>
+                          <div className="font-medium text-teal-800">{effectiveCusName}</div>
                           <div className="font-mono text-[11px] text-slate-500">
                             仅限 {effectiveCusCode} 工单
                           </div>
@@ -738,7 +738,7 @@ export function MaterialCatalogPanel({
                           <button
                             type="button"
                             onClick={() => startEdit(m)}
-                            className="inline-flex items-center gap-1 font-medium text-sky-700 hover:text-sky-900"
+                            className="inline-flex items-center gap-1 font-medium text-teal-700 hover:text-teal-900"
                           >
                             <Pencil className="h-3 w-3" />
                             编辑

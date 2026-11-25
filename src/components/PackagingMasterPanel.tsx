@@ -272,7 +272,7 @@ export function PackagingMasterPanel({
               </div>
               <button
                 type="submit"
-                className="inline-flex items-center justify-center gap-1 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800 whitespace-nowrap shrink-0"
+                className="inline-flex items-center justify-center gap-1 rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white hover:bg-teal-800 whitespace-nowrap shrink-0"
               >
                 {editingCode ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                 {editingCode ? '保存修改' : '保存包装规格'}
@@ -327,7 +327,7 @@ export function PackagingMasterPanel({
                   <tr
                     key={spec.packagingCode}
                     className={`hover:bg-slate-50 ${
-                      editingCode === spec.packagingCode ? 'bg-sky-50/40' : ''
+                      editingCode === spec.packagingCode ? 'bg-teal-50/40' : ''
                     }`}
                   >
                     <td className="px-4 py-3 font-mono font-semibold text-slate-900 whitespace-nowrap">
@@ -352,7 +352,7 @@ export function PackagingMasterPanel({
                         {spec.allowSplit ? '允许分盘' : '禁止分盘'}
                       </span>
                       <span className="mx-1.5 text-slate-300">·</span>
-                      <span className={spec.allowMerge ? 'text-sky-700' : 'text-slate-400'}>
+                      <span className={spec.allowMerge ? 'text-teal-700' : 'text-slate-400'}>
                         {spec.allowMerge ? '可合盘' : '禁止合盘'}
                       </span>
                     </td>
@@ -382,7 +382,7 @@ export function PackagingMasterPanel({
                           <button
                             type="button"
                             onClick={() => startEdit(spec)}
-                            className="inline-flex items-center gap-1 font-medium text-sky-700 hover:text-sky-900"
+                            className="inline-flex items-center gap-1 font-medium text-teal-700 hover:text-teal-900"
                           >
                             <Pencil className="h-3 w-3" />
                             编辑

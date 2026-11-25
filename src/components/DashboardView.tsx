@@ -70,45 +70,45 @@ export function DashboardView({
     <div className="space-y-6">
       {/* KPI Strip */}
       <section aria-label="关键仓储指标" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="mes-panel rounded-lg p-5">
           <div className="text-xs font-medium text-slate-500">在库料盘数 (UID)</div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="font-mono text-2xl font-bold text-slate-900 tabular-nums">
+          <div className="mt-2.5 flex items-baseline justify-between gap-2">
+            <span className="font-mono text-[26px] font-bold leading-none text-slate-900 tabular-nums">
               {inStockReels.length}
             </span>
             <span className="text-xs text-slate-500 tabular-nums">
-              线边在制 {lineReels.length} 盘
+              线边在制 <strong className="font-mono font-semibold text-slate-700">{lineReels.length}</strong> 盘
             </span>
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <div className="text-xs font-medium text-slate-500">活跃SMT工单 / 波次</div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="font-mono text-2xl font-bold text-slate-900 tabular-nums">
+        <div className="mes-panel rounded-lg p-5">
+          <div className="text-xs font-medium text-slate-500">活跃 SMT 工单 / 波次</div>
+          <div className="mt-2.5 flex items-baseline justify-between gap-2">
+            <span className="font-mono text-[26px] font-bold leading-none text-slate-900 tabular-nums">
               {state.workOrders.filter((w) => w.status !== 'COMPLETED').length}
             </span>
-            <span className="text-xs text-sky-700 font-medium tabular-nums">
+            <span className="text-xs font-semibold text-teal-700 tabular-nums">
               进行中波次 {activeWaves.length} 单
             </span>
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="mes-panel rounded-lg p-5">
           <div className="text-xs font-medium text-slate-500">全链路扫码追溯流水</div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="font-mono text-2xl font-bold text-slate-900 tabular-nums">
+          <div className="mt-2.5 flex items-baseline justify-between gap-2">
+            <span className="font-mono text-[26px] font-bold leading-none text-slate-900 tabular-nums">
               {state.traceEvents.length}
             </span>
-            <span className="text-xs text-emerald-700 font-medium">实时闭环记录</span>
+            <span className="text-xs font-medium text-emerald-700">实时闭环留痕</span>
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="mes-panel rounded-lg p-5">
           <div className="text-xs font-medium text-slate-500">车间异常预警项</div>
-          <div className="mt-2 flex items-baseline justify-between">
+          <div className="mt-2.5 flex items-baseline justify-between gap-2">
             <span
-              className={`font-mono text-2xl font-bold tabular-nums ${
+              className={`font-mono text-[26px] font-bold leading-none tabular-nums ${
                 anomalies.criticalCount > 0
                   ? 'text-red-600'
                   : anomalies.warningCount > 0
@@ -119,7 +119,8 @@ export function DashboardView({
               {anomalies.totalCount}
             </span>
             <span className="text-xs text-slate-500 tabular-nums">
-              阻断 {anomalies.criticalCount} · 临界 {anomalies.warningCount}
+              阻断 <strong className="font-mono font-semibold text-red-700">{anomalies.criticalCount}</strong> · 临界{' '}
+              <strong className="font-mono font-semibold text-amber-700">{anomalies.warningCount}</strong>
             </span>
           </div>
         </div>
@@ -147,20 +148,20 @@ export function DashboardView({
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         {/* Left 2/3: Work Orders + Recent Traceability */}
         <div className="space-y-6 xl:col-span-2">
-          <section className="rounded-lg border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <section className="mes-panel rounded-lg">
+            <div className="flex items-center justify-between border-b border-slate-200/90 px-5 py-4">
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">
-                  SMT 生产工单与BOM齐套率 (无ERP独立排程)
+                  SMT 生产工单与 BOM 齐套率（无 ERP 独立排程）
                 </h2>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  自动汇总BOM耗损需求并比对在库可用料盘，支持一键生成波次发料
+                  自动汇总 BOM 耗损需求并比对在库可用料盘，支持一键生成波次发料
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => onNavigate('wave')}
-                className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:text-sky-800 whitespace-nowrap shrink-0"
+                onClick={() => onNavigate('wavePick')}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 transition-colors hover:text-teal-800 whitespace-nowrap shrink-0"
               >
                 前往波次发料
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -169,7 +170,7 @@ export function DashboardView({
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                <thead className="border-b border-slate-200/90 bg-[#f8fafb] text-slate-500">
                   <tr>
                     <th className="px-5 py-2.5 font-medium whitespace-nowrap">工单编号</th>
                     <th className="px-4 py-2.5 font-medium whitespace-nowrap">产品与SMT线别</th>
@@ -222,7 +223,7 @@ export function DashboardView({
                           <button
                             type="button"
                             onClick={() => onInspectTrace(wo.workOrderId)}
-                            className="text-xs font-medium text-sky-700 hover:text-sky-800"
+                            className="text-xs font-semibold text-teal-700 transition-colors hover:text-teal-800"
                           >
                             追溯用料
                           </button>
@@ -235,8 +236,8 @@ export function DashboardView({
             </div>
           </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <section className="mes-panel rounded-lg">
+            <div className="flex items-center justify-between border-b border-slate-200/90 px-5 py-4">
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">最新作业扫码追溯流水</h2>
                 <p className="mt-0.5 text-xs text-slate-500">
@@ -246,7 +247,7 @@ export function DashboardView({
               <button
                 type="button"
                 onClick={() => onNavigate('trace')}
-                className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:text-sky-800 whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 transition-colors hover:text-teal-800 whitespace-nowrap shrink-0"
               >
                 完整追溯中心
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -255,7 +256,7 @@ export function DashboardView({
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                <thead className="border-b border-slate-200/90 bg-[#f8fafb] text-slate-500">
                   <tr>
                     <th className="px-5 py-2.5 font-medium whitespace-nowrap">时间</th>
                     <th className="px-4 py-2.5 font-medium whitespace-nowrap">作业类型</th>
@@ -280,7 +281,7 @@ export function DashboardView({
                           <button
                             type="button"
                             onClick={() => onInspectTrace(evt.reelId)}
-                            className="font-mono font-medium text-sky-700 hover:underline"
+                            className="font-mono font-semibold text-teal-700 hover:underline"
                           >
                             {evt.reelId}
                           </button>
@@ -318,8 +319,8 @@ export function DashboardView({
 
         {/* Right 1/3: SMT Line-side Active Reels + Zone Capacity */}
         <div className="space-y-6">
-          <section className="rounded-lg border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <section className="mes-panel rounded-lg">
+            <div className="flex items-center justify-between border-b border-slate-200/90 px-5 py-4">
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">SMT 线边在制料盘状态</h2>
                 <p className="mt-0.5 text-xs text-slate-500">
@@ -329,7 +330,7 @@ export function DashboardView({
               <button
                 type="button"
                 onClick={() => onNavigate('replenish')}
-                className="text-xs font-medium text-sky-700 hover:text-sky-800 whitespace-nowrap shrink-0"
+                className="text-xs font-semibold text-teal-700 transition-colors hover:text-teal-800 whitespace-nowrap shrink-0"
               >
                 补料/退库
               </button>
@@ -346,7 +347,7 @@ export function DashboardView({
                         <button
                           type="button"
                           onClick={() => onInspectTrace(r.reelId)}
-                          className="font-mono font-semibold text-sky-700 hover:underline"
+                          className="font-mono font-semibold text-teal-700 hover:underline"
                         >
                           {r.reelId}
                         </button>
@@ -372,9 +373,9 @@ export function DashboardView({
             </div>
           </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white p-5">
+          <section className="mes-panel rounded-lg p-5">
             <h2 className="text-sm font-semibold text-slate-900">库区存储占用概况</h2>
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-3.5">
               {['电子料主库区', '防潮恒温柜(MSD)', 'PCB板库区', '锡膏冷藏库'].map((zone) => {
                 const zoneBins = state.bins.filter((b) => b.zone === zone);
                 const binCodes = new Set(zoneBins.map((b) => b.binCode));
@@ -389,24 +390,24 @@ export function DashboardView({
                 return (
                   <div key={zone}>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-700">{zone}</span>
+                      <span className="font-medium text-slate-700">{zone}</span>
                       <span className="font-mono text-slate-500 tabular-nums">
                         {used} / {cap} 盘
                       </span>
                     </div>
                     <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full bg-sky-600" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-teal-600 transition-all" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            <div className="mt-5 border-t border-slate-200 pt-4">
+            <div className="mt-5 border-t border-slate-200/90 pt-4">
               <button
                 type="button"
                 onClick={onResetDemo}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 重置演示仓储数据

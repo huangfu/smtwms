@@ -324,7 +324,7 @@ export function BarcodeLabelModal({
               onClick={() => setViewMode('PREVIEW')}
               className={`inline-flex items-center gap-1 rounded px-2.5 py-1 font-medium whitespace-nowrap ${
                 viewMode === 'PREVIEW'
-                  ? 'bg-sky-700 text-white'
+                  ? 'bg-teal-700 text-white'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -336,7 +336,7 @@ export function BarcodeLabelModal({
               onClick={() => setViewMode('ZPL')}
               className={`inline-flex items-center gap-1 rounded px-2.5 py-1 font-medium whitespace-nowrap ${
                 viewMode === 'ZPL'
-                  ? 'bg-sky-700 text-white'
+                  ? 'bg-teal-700 text-white'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -399,7 +399,7 @@ export function BarcodeLabelModal({
           <div className="no-print rounded-md border border-slate-200 bg-slate-50 p-3.5 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
               <div className="inline-flex items-center gap-1.5 font-semibold text-slate-800">
-                <Wifi className="h-3.5 w-3.5 text-sky-700" />
+                <Wifi className="h-3.5 w-3.5 text-teal-700" />
                 Zebra 打印机连接通道设置
               </div>
               {onSavePrinterConfig && (
@@ -654,7 +654,7 @@ export function BarcodeLabelModal({
               type="button"
               disabled={busyAction !== null}
               onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800 disabled:opacity-50 whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white hover:bg-teal-800 disabled:opacity-50 whitespace-nowrap"
             >
               <Printer className="h-3.5 w-3.5" />
               {busyAction === 'PRINT'

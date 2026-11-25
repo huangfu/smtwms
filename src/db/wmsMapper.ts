@@ -1,5 +1,7 @@
 import type {
+  AsnLine,
   AsnOrder,
+  AsnWorkflowStage,
   BarcodeRule,
   BomMaster,
   Customer,
@@ -19,6 +21,68 @@ import type {
   WorkOrder,
   ZebraPrinterConfig,
 } from '../types/wms.ts';
+
+interface PersistedAsnWorkflowMeta {
+  workflowStage?: AsnWorkflowStage;
+  deliveryNoteNo?: string;
+  carrierName?: string;
+  arrivedAt?: string;
+  receivingCompletedAt?: string;
+  iqcCompletedAt?: string;
+  putawayCompletedAt?: string;
+  inventoryUpdatedAt?: string;
+  syncedAt?: string;
+  syncChannel?: string;
+  syncRefNo?: string;
+}
+
+type PersistedAsnLine = AsnLine & {
+  _asnWorkflow?: PersistedAsnWorkflowMeta;
+};
+
+export function serializeAsnLinesWithMeta(asn: AsnOrder): AsnLine[] {
+  const meta: PersistedAsnWorkflowMeta = {
+    workflowStage: asn.workflowStage,
+    deliveryNoteNo: asn.deliveryNoteNo,
+    carrierName: asn.carrierName,
+    arrivedAt: asn.arrivedAt,
+    receivingCompletedAt: asn.receivingCompletedAt,
+    iqcCompletedAt: asn.iqcCompletedAt,
+    putawayCompletedAt: asn.putawayCompletedAt,
+    inventoryUpdatedAt: asn.inventoryUpdatedAt,
+    syncedAt: asn.syncedAt,
+    syncChannel: asn.syncChannel,
+    syncRefNo: asn.syncRefNo,
+  };
+  const hasMeta = Object.values(meta).some((v) => v !== undefined);
+  return asn.lines.map((line, idx) => {
+    const clean: PersistedAsnLine = { ...line };
+    delete clean._asnWorkflow;
+    if (idx === 0 && hasMeta) {
+      clean._asnWorkflow = meta;
+    }
+    return clean;
+  });
+}
+
+export function extractAsnMetaFromLines(rawLines: unknown): {
+  lines: AsnLine[];
+  meta: PersistedAsnWorkflowMeta;
+} {
+  if (!Array.isArray(rawLines)) {
+    return { lines: [], meta: {} };
+  }
+  let meta: PersistedAsnWorkflowMeta = {};
+  const lines: AsnLine[] = rawLines.map((item) => {
+    const record = (item ?? {}) as PersistedAsnLine;
+    if (record._asnWorkflow && typeof record._asnWorkflow === 'object') {
+      meta = { ...record._asnWorkflow };
+    }
+    const { _asnWorkflow: _ignored, ...cleanLine } = record;
+    return cleanLine;
+  });
+  return { lines, meta };
+}
 
 export type WmsSliceKey =
   | 'printerConfig'
@@ -240,20 +304,34 @@ export function mapRowsToPartialWmsState(rows: RawDbWorkspaceRows): Partial<WmsS
       items: (Array.isArray(r.items) ? r.items : []) as BomMaster['items'],
       updatedAt: String(r.updatedAt),
     })),
-    asns: rows.asns.map((r) => ({
-      asnNo: String(r.asnNo),
-      poNo: String(r.poNo),
-      supplierCode: String(r.supplierCode),
-      supplierName: String(r.supplierName),
-      warehouseCode: String(r.warehouseCode),
-      expectedDate: String(r.expectedDate),
-      purchaser: String(r.purchaser),
-      source: r.source as AsnOrder['source'],
-      status: r.status as AsnOrder['status'],
-      notes: optStr(r.notes),
-      lines: (Array.isArray(r.lines) ? r.lines : []) as AsnOrder['lines'],
-      createdAt: String(r.createdAt),
-    })),
+    asns: rows.asns.map((r) => {
+      const { lines, meta } = extractAsnMetaFromLines(r.lines);
+      return {
+        asnNo: String(r.asnNo),
+        poNo: String(r.poNo),
+        supplierCode: String(r.supplierCode),
+        supplierName: String(r.supplierName),
+        warehouseCode: String(r.warehouseCode),
+        expectedDate: String(r.expectedDate),
+        purchaser: String(r.purchaser),
+        source: r.source as AsnOrder['source'],
+        status: r.status as AsnOrder['status'],
+        workflowStage: optStr(r.workflowStage ?? meta.workflowStage) as AsnOrder['workflowStage'],
+        deliveryNoteNo: optStr(r.deliveryNoteNo ?? meta.deliveryNoteNo),
+        carrierName: optStr(r.carrierName ?? meta.carrierName),
+        arrivedAt: optStr(r.arrivedAt ?? meta.arrivedAt),
+        receivingCompletedAt: optStr(r.receivingCompletedAt ?? meta.receivingCompletedAt),
+        iqcCompletedAt: optStr(r.iqcCompletedAt ?? meta.iqcCompletedAt),
+        putawayCompletedAt: optStr(r.putawayCompletedAt ?? meta.putawayCompletedAt),
+        inventoryUpdatedAt: optStr(r.inventoryUpdatedAt ?? meta.inventoryUpdatedAt),
+        syncedAt: optStr(r.syncedAt ?? meta.syncedAt),
+        syncChannel: optStr(r.syncChannel ?? meta.syncChannel),
+        syncRefNo: optStr(r.syncRefNo ?? meta.syncRefNo),
+        notes: optStr(r.notes),
+        lines,
+        createdAt: String(r.createdAt),
+      };
+    }),
     reels: rows.reels.map((r) => ({
       reelId: String(r.reelId),
       parentReelId: optStr(r.parentReelId),

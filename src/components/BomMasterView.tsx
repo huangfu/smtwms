@@ -302,7 +302,7 @@ export function BomMasterView({ state, onSaveBom, onDeleteBom }: BomMasterViewPr
         </div>
         <div className="rounded-lg border border-slate-200 bg-white px-5 py-4">
           <div className="text-xs font-medium text-slate-500">机型独占特料行</div>
-          <div className="mt-1 font-mono text-2xl font-bold text-sky-700 tabular-nums">
+          <div className="mt-1 font-mono text-2xl font-bold text-teal-700 tabular-nums">
             {totalSpecialCount}
           </div>
           <div className="mt-0.5 text-[11px] text-slate-400">单表标明机型专配特料及位号</div>
@@ -351,7 +351,7 @@ export function BomMasterView({ state, onSaveBom, onDeleteBom }: BomMasterViewPr
                 }}
                 className={`rounded px-2.5 py-1 whitespace-nowrap ${
                   formMode === 'ADD_LINE'
-                    ? 'bg-white font-semibold text-sky-800 shadow-sm'
+                    ? 'bg-white font-semibold text-teal-800 shadow-sm'
                     : 'text-slate-600'
                 }`}
               >
@@ -364,7 +364,7 @@ export function BomMasterView({ state, onSaveBom, onDeleteBom }: BomMasterViewPr
                 }}
                 className={`rounded px-2.5 py-1 whitespace-nowrap ${
                   formMode === 'EDIT_MODEL'
-                    ? 'bg-white font-semibold text-sky-800 shadow-sm'
+                    ? 'bg-white font-semibold text-teal-800 shadow-sm'
                     : 'text-slate-600'
                 }`}
               >
@@ -381,7 +381,7 @@ export function BomMasterView({ state, onSaveBom, onDeleteBom }: BomMasterViewPr
                 }}
                 className={`rounded px-2.5 py-1 whitespace-nowrap ${
                   formMode === 'NEW_MODEL'
-                    ? 'bg-white font-semibold text-sky-800 shadow-sm'
+                    ? 'bg-white font-semibold text-teal-800 shadow-sm'
                     : 'text-slate-600'
                 }`}
               >
@@ -660,7 +660,7 @@ export function BomMasterView({ state, onSaveBom, onDeleteBom }: BomMasterViewPr
             </div>
             <button
               type="submit"
-              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-sky-700 px-5 py-2 text-xs font-medium text-white hover:bg-sky-800 whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-teal-700 px-5 py-2 text-xs font-medium text-white hover:bg-teal-800 whitespace-nowrap shrink-0"
             >
               {editingLine || formMode === 'EDIT_MODEL' ? (
                 <Pencil className="h-3.5 w-3.5" />
@@ -789,7 +789,7 @@ export function BomMasterView({ state, onSaveBom, onDeleteBom }: BomMasterViewPr
                     key={rowKey}
                     className={`hover:bg-slate-50 ${
                       isEditingThis
-                        ? 'bg-sky-50/50'
+                        ? 'bg-teal-50/50'
                         : role === 'SUBSTITUTE'
                           ? 'bg-amber-50/25'
                           : ''
@@ -875,7 +875,7 @@ export function BomMasterView({ state, onSaveBom, onDeleteBom }: BomMasterViewPr
                           <button
                             type="button"
                             onClick={() => handleStartEditRow(row)}
-                            className="inline-flex items-center gap-1 font-medium text-sky-700 hover:text-sky-900"
+                            className="inline-flex items-center gap-1 font-medium text-teal-700 hover:text-teal-900"
                           >
                             <Pencil className="h-3 w-3" />
                             编辑

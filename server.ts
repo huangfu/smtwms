@@ -43,6 +43,7 @@ import {
   applyScrap,
   bakeMsdReel,
   cancelAsnOrder,
+  confirmAsnDeliveryArrival,
   createAsnOrder,
   createCycleCountTask,
   createWaveOrder,
@@ -57,11 +58,15 @@ import {
   deleteWarehouseBin,
   deleteWarehouseKeeper,
   importAsnFromCsv,
+  inspectAsnLineIqc,
   issueWaveAllocation,
+  putawayAsnLine,
   saveBarcodeRule,
   saveBomMaster,
   saveLabelTemplate,
   savePrinterConfig,
+  scanAsnReceiving,
+  syncAsnOrderInfo,
   updateCustomer,
   updateMaterialSku,
   updatePackagingSpec,
@@ -611,6 +616,89 @@ async function startServer() {
   app.post('/api/wms/asns/:asnNo/cancel', async (req: AuthRequest, res) => {
     await handleMutation(req, res, (cur) => {
       const result = cancelAsnOrder(cur, req.params.asnNo);
+      return { state: result.state, payload: { asn: result.asn } };
+    });
+  });
+
+  app.post('/api/wms/asns/:asnNo/arrive', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
+      const result = confirmAsnDeliveryArrival(cur, {
+        asnNo: req.params.asnNo,
+        deliveryNoteNo: req.body?.deliveryNoteNo,
+        carrierName: req.body?.carrierName,
+        operator: req.body?.operator,
+      });
+      return {
+        state: result.state,
+        payload: { asn: result.asn, stageAdvancedTo: result.stageAdvancedTo },
+      };
+    });
+  });
+
+  app.post('/api/wms/asns/:asnNo/scan-receive', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
+      const result = scanAsnReceiving(cur, {
+        ...req.body,
+        asnNo: req.params.asnNo,
+      });
+      return {
+        state: result.state,
+        payload: {
+          asn: result.asn,
+          matchedLine: result.matchedLine,
+          addedQty: result.addedQty,
+          lineBucket: result.lineBucket,
+          stageAdvancedTo: result.stageAdvancedTo,
+          parsed: result.parsed,
+        },
+      };
+    });
+  });
+
+  app.post('/api/wms/asns/:asnNo/iqc', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
+      const result = inspectAsnLineIqc(cur, {
+        ...req.body,
+        asnNo: req.params.asnNo,
+      });
+      return {
+        state: result.state,
+        payload: {
+          asn: result.asn,
+          matchedLine: result.matchedLine,
+          passedAdded: result.passedAdded,
+          rejectedAdded: result.rejectedAdded,
+          lineBucket: result.lineBucket,
+          stageAdvancedTo: result.stageAdvancedTo,
+        },
+      };
+    });
+  });
+
+  app.post('/api/wms/asns/:asnNo/putaway', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
+      const result = putawayAsnLine(cur, {
+        ...req.body,
+        asnNo: req.params.asnNo,
+      });
+      return {
+        state: result.state,
+        payload: {
+          asn: result.asn,
+          matchedLine: result.matchedLine,
+          reel: result.reel,
+          stageAdvancedTo: result.stageAdvancedTo,
+        },
+      };
+    });
+  });
+
+  app.post('/api/wms/asns/:asnNo/sync', async (req: AuthRequest, res) => {
+    await handleMutation(req, res, (cur) => {
+      const result = syncAsnOrderInfo(cur, {
+        asnNo: req.params.asnNo,
+        syncChannel: req.body?.syncChannel,
+      });
       return { state: result.state, payload: { asn: result.asn } };
     });
   });

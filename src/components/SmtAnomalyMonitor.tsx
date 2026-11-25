@@ -31,7 +31,7 @@ interface UnifiedRow {
 const SEVERITY_META: Record<AnomalySeverity, { label: string; textClass: string }> = {
   CRITICAL: { label: '紧急阻断', textClass: 'text-red-700' },
   WARNING: { label: '临界预警', textClass: 'text-amber-700' },
-  INFO: { label: '水位提示', textClass: 'text-sky-700' },
+  INFO: { label: '水位提示', textClass: 'text-teal-700' },
 };
 
 export function SmtAnomalyMonitor({
@@ -67,7 +67,7 @@ export function SmtAnomalyMonitor({
       context: s.affectedWorkOrders.join(', '),
       recommendation: s.recommendation,
       actionLabel: '去收料入库',
-      onAction: () => onNavigate('inbound'),
+      onAction: () => onNavigate('asnReceive'),
     })),
     ...report.msdAlerts.map((m): UnifiedRow => ({
       id: m.id,
@@ -123,9 +123,9 @@ export function SmtAnomalyMonitor({
               : '查看台账',
         onAction: () => {
           if (l.anomalyType === 'ZERO_STOCK' || l.anomalyType === 'LOW_STOCK') {
-            onNavigate('inbound');
+            onNavigate('asnReceive');
           } else if (l.reelId) {
-            onNavigate('wave');
+            onNavigate('wavePick');
           } else {
             onNavigate('master');
           }
@@ -143,10 +143,10 @@ export function SmtAnomalyMonitor({
   return (
     <section
       aria-label="SMT车间异常监控中心"
-      className="rounded-lg border border-slate-200 bg-white"
+      className="mes-panel rounded-lg"
     >
       {/* Header & Filter Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/90 px-5 py-4">
         <div className="flex items-start gap-2.5">
           <ShieldAlert
             className={`mt-0.5 h-4 w-4 shrink-0 ${
@@ -182,10 +182,10 @@ export function SmtAnomalyMonitor({
               role="tab"
               aria-selected={tab === item.key}
               onClick={() => setTab(item.key)}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap shrink-0 tabular-nums ${
+              className={`rounded-md px-3 py-1 text-xs transition-colors whitespace-nowrap shrink-0 tabular-nums ${
                 tab === item.key
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white font-semibold text-teal-800 shadow-xs'
+                  : 'font-medium text-slate-600 hover:text-slate-900'
               }`}
             >
               {item.label}
@@ -226,7 +226,7 @@ export function SmtAnomalyMonitor({
 
         <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2 text-xs text-slate-600">
-            <Layers className="h-3.5 w-3.5 text-sky-700 shrink-0" />
+            <Layers className="h-3.5 w-3.5 text-teal-700 shrink-0" />
             <span>异常水位 (低仓/超储/呆滞)</span>
           </div>
           <span className="font-mono text-sm font-bold text-slate-900 tabular-nums">
@@ -244,7 +244,7 @@ export function SmtAnomalyMonitor({
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+            <thead className="border-b border-slate-200/90 bg-[#f8fafb] text-slate-500">
               <tr>
                 <th className="px-5 py-2.5 font-medium whitespace-nowrap">异常类别 / 级别</th>
                 <th className="px-4 py-2.5 font-medium whitespace-nowrap">异常对象 (UID / MPN)</th>
@@ -294,8 +294,8 @@ export function SmtAnomalyMonitor({
                         onClick={row.onAction}
                         className={`rounded-md border px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
                           row.actionLabel === '烘烤复位解锁'
-                            ? 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'
-                            : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                            ? 'border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50/40 hover:text-teal-800'
                         }`}
                       >
                         {isBaking ? '复位中...' : row.actionLabel}

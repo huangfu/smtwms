@@ -1,11 +1,15 @@
 import type {
+  AsnLine,
   AsnOrder,
+  AsnWorkflowStage,
   BarcodeRule,
   BomItem,
   Customer,
   LabelTemplate,
   MaterialSku,
   PackagingSpec,
+  ReelItem,
+  ScanTabBucket,
   Supplier,
   WarehouseBin,
   WarehouseKeeper,
@@ -417,6 +421,107 @@ export const wmsApi = {
     request<ApiResponse>(`/api/wms/asns/${encodeURIComponent(asnNo)}/cancel`, {
       method: 'POST',
     }),
+
+  arriveAsn: (
+    asnNo: string,
+    body: { deliveryNoteNo?: string; carrierName?: string; operator?: string }
+  ) =>
+    request<ApiResponse<{ asn: AsnOrder; stageAdvancedTo: AsnWorkflowStage }>>(
+      `/api/wms/asns/${encodeURIComponent(asnNo)}/arrive`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    ),
+
+  scanAsnReceive: (
+    asnNo: string,
+    body: {
+      rawBarcode?: string;
+      manualSkuOrMpn?: string;
+      lineId?: string;
+      qty?: number;
+      lotNumber?: string;
+      dateCode?: string;
+      targetBin?: string;
+      operator: string;
+    }
+  ) =>
+    request<
+      ApiResponse<{
+        asn: AsnOrder;
+        matchedLine: AsnLine;
+        addedQty: number;
+        lineBucket: ScanTabBucket;
+        stageAdvancedTo?: AsnWorkflowStage;
+      }>
+    >(`/api/wms/asns/${encodeURIComponent(asnNo)}/scan-receive`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  inspectAsnIqc: (
+    asnNo: string,
+    body: {
+      lineId?: string;
+      rawBarcode?: string;
+      manualSkuOrMpn?: string;
+      result?: 'PASSED' | 'FAILED';
+      qty?: number;
+      passedQty?: number;
+      rejectedQty?: number;
+      note?: string;
+      operator: string;
+    }
+  ) =>
+    request<
+      ApiResponse<{
+        asn: AsnOrder;
+        matchedLine: AsnLine;
+        passedAdded: number;
+        rejectedAdded: number;
+        lineBucket: ScanTabBucket;
+        stageAdvancedTo?: AsnWorkflowStage;
+      }>
+    >(`/api/wms/asns/${encodeURIComponent(asnNo)}/iqc`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  putawayAsnLine: (
+    asnNo: string,
+    body: {
+      lineId?: string;
+      rawBarcode?: string;
+      manualSkuOrMpn?: string;
+      binCode?: string;
+      qty?: number;
+      lotNumber?: string;
+      dateCode?: string;
+      reelId?: string;
+      operator: string;
+    }
+  ) =>
+    request<
+      ApiResponse<{
+        asn: AsnOrder;
+        matchedLine: AsnLine;
+        reel: ReelItem;
+        stageAdvancedTo?: AsnWorkflowStage;
+      }>
+    >(`/api/wms/asns/${encodeURIComponent(asnNo)}/putaway`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  syncAsnInfo: (asnNo: string, body?: { syncChannel?: string }) =>
+    request<ApiResponse<{ asn: AsnOrder }>>(
+      `/api/wms/asns/${encodeURIComponent(asnNo)}/sync`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body ?? {}),
+      }
+    ),
 
   addPackagingSpec: (body: PackagingSpec) =>
     request<ApiResponse<{ spec: PackagingSpec }>>('/api/wms/packaging-specs', {

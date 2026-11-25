@@ -1,9 +1,15 @@
-import { ArrowUpRight, CheckCircle2, RotateCcw } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowUpRight, RotateCcw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReelItem, WmsState } from '../types/wms';
 import { formatTime } from '../utils/formatters';
+import { completePdaScan, focusScanInputOnMount } from '../utils/pdaScanFocus';
+import { parseBarcodeString } from '../utils/wmsLogic';
+import { PdaScanField } from './PdaScanField';
+
+export type ReplenishPageMode = 'replenish' | 'returnStock';
 
 interface ReplenishReturnViewProps {
+  pageMode: ReplenishPageMode;
   state: WmsState;
   onReplenish: (payload: {
     workOrderId: string;
@@ -26,12 +32,13 @@ interface ReplenishReturnViewProps {
 }
 
 export function ReplenishReturnView({
+  pageMode,
   state,
   onReplenish,
   onReturn,
   onOpenLabel,
 }: ReplenishReturnViewProps) {
-  const [tab, setTab] = useState<'replenish' | 'return'>('replenish');
+  const isReplenish = pageMode === 'replenish';
   const activeWos = state.workOrders.filter((w) => w.status !== 'COMPLETED');
   const firstWo = activeWos[0]?.workOrderId ?? '';
 
@@ -66,8 +73,23 @@ export function ReplenishReturnView({
   const [retError, setRetError] = useState<string | null>(null);
   const [returnedReel, setReturnedReel] = useState<ReelItem | null>(null);
 
-  const selectReturnReel = (reelId: string) => {
+  const normalizeScannedReel = (raw: string): string => {
+    if (raw.includes('|') || raw.includes(';') || raw.includes(',') || /^UID:/i.test(raw.trim())) {
+      const parsed = parseBarcodeString(raw.trim(), state.barcodeRules);
+      if (parsed.reelId) return parsed.reelId;
+    }
+    return raw;
+  };
+
+  const selectReplenishReel = (raw: string) => {
+    setRepReelId(normalizeScannedReel(raw));
+    if (repError) setRepError(null);
+  };
+
+  const selectReturnReel = (raw: string) => {
+    const reelId = normalizeScannedReel(raw);
     setRetReelId(reelId);
+    if (retError) setRetError(null);
     const found = state.reels.find((r) => r.reelId === reelId);
     if (found) {
       if (found.issuedQty > 0) {
@@ -90,24 +112,49 @@ export function ReplenishReturnView({
       r.qty > 0
   );
 
-  const selectedReturnReel = state.reels.find((r) => r.reelId === retReelId);
+  const selectedReplenishReel = state.reels.find((r) => r.reelId === repReelId.trim());
+  const selectedReturnReel = state.reels.find((r) => r.reelId === retReelId.trim());
+
+  const repScanInputRef = useRef<HTMLInputElement>(null);
+  const retScanInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isReplenish) {
+      focusScanInputOnMount(repScanInputRef);
+    } else {
+      focusScanInputOnMount(retScanInputRef);
+    }
+  }, [isReplenish]);
 
   const handleReplenishSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRepError(null);
     setRepSuccess(null);
+    const trimmed = repReelId.trim();
     try {
       await onReplenish({
         workOrderId: repWo,
-        reelId: repReelId,
+        reelId: trimmed,
         qty: Number(repQty),
         reason: repReason,
         station: repStation,
         operator: repOperator,
       });
       setRepSuccess(`补料成功: 已向工单 ${repWo} (${repStation}) 补发 ${repQty}`);
+      completePdaScan({
+        currentValue: repReelId,
+        setValue: setRepReelId,
+        inputRef: repScanInputRef,
+        outcome: 'success',
+      });
     } catch (err) {
       setRepError(err instanceof Error ? err.message : '补料操作失败');
+      completePdaScan({
+        currentValue: repReelId,
+        setValue: setRepReelId,
+        inputRef: repScanInputRef,
+        outcome: 'error',
+      });
     }
   };
 
@@ -115,10 +162,11 @@ export function ReplenishReturnView({
     e.preventDefault();
     setRetError(null);
     setReturnedReel(null);
+    const trimmed = retReelId.trim();
     try {
       const reel = await onReturn({
         workOrderId: retWo,
-        reelId: retReelId,
+        reelId: trimmed,
         returnQty: Number(retQty),
         toBin: retBin,
         reason: retReason,
@@ -126,48 +174,35 @@ export function ReplenishReturnView({
         splitChildReel,
       });
       setReturnedReel(reel);
+      completePdaScan({
+        currentValue: retReelId,
+        setValue: setRetReelId,
+        inputRef: retScanInputRef,
+        outcome: 'success',
+      });
     } catch (err) {
       setRetError(err instanceof Error ? err.message : '退料操作失败');
+      completePdaScan({
+        currentValue: retReelId,
+        setValue: setRetReelId,
+        inputRef: retScanInputRef,
+        outcome: 'error',
+      });
     }
   };
 
   const recentRepRetEvents = state.traceEvents
-    .filter((e) => e.action === 'REPLENISH' || e.action === 'RETURN')
+    .filter((e) => e.action === (isReplenish ? 'REPLENISH' : 'RETURN'))
     .slice(0, 10);
 
   return (
-    <div className="space-y-6">
-      <div className="inline-flex items-center gap-1 rounded-lg bg-slate-200/70 p-1">
-        <button
-          type="button"
-          onClick={() => setTab('replenish')}
-          className={`rounded-md px-4 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-            tab === 'replenish'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          生产中补料 (抛料/断带紧急补领)
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('return')}
-          className={`rounded-md px-4 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-            tab === 'return'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          生产退料 (余料点数/分拆回库)
-        </button>
-      </div>
-
+    <div className="space-y-4">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        <section className="rounded-lg border border-slate-200 bg-white p-6 xl:col-span-5">
-          {tab === 'replenish' ? (
+        <section className="mes-panel p-4 sm:p-6 xl:col-span-5">
+          {isReplenish ? (
             <>
               <div className="flex items-center gap-2 border-b border-slate-200 pb-4">
-                <ArrowUpRight className="h-4 w-4 text-amber-600" />
+                <ArrowUpRight className="h-4 w-4 text-teal-700" />
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">SMT 产线补料作业</h2>
                   <p className="text-xs text-slate-500">
@@ -185,7 +220,7 @@ export function ReplenishReturnView({
                     id="rep-wo"
                     value={repWo}
                     onChange={(e) => setRepWo(e.target.value)}
-                    className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+                    className="mt-1.5 min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/15"
                   >
                     {activeWos.map((w) => (
                       <option key={w.workOrderId} value={w.workOrderId}>
@@ -196,16 +231,39 @@ export function ReplenishReturnView({
                 </div>
 
                 <div>
-                  <label htmlFor="rep-reel" className="block text-xs font-medium text-slate-700">
-                    扫描或选择补料料盘 UID (自动校验客户发料准入)
-                  </label>
-                  <input
+                  <PdaScanField
                     id="rep-reel"
-                    list="replenish-reel-options"
+                    inputRef={repScanInputRef}
+                    label="扫描或选择补料料盘 UID"
+                    subtitle="自动校验客户发料准入与 MSD 状态，支持扫描复合条码"
                     value={repReelId}
-                    onChange={(e) => setRepReelId(e.target.value)}
-                    placeholder="扫码或输入料盘 UID..."
-                    className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm text-slate-900"
+                    onChange={selectReplenishReel}
+                    list="replenish-reel-options"
+                    placeholder="扫描补料料盘 UID 或复合码..."
+                    feedback={
+                      repError
+                        ? { type: 'error', message: repError }
+                        : repSuccess
+                          ? { type: 'success', message: repSuccess }
+                          : null
+                    }
+                    helperHint={
+                      selectedReplenishReel ? (
+                        <span className="font-mono text-[11px] text-slate-500">
+                          {selectedReplenishReel.mpn} · 库位 {selectedReplenishReel.binCode} · 余量{' '}
+                          {selectedReplenishReel.qty.toLocaleString()} ·{' '}
+                          {selectedReplenishReel.customerCode
+                            ? `${selectedReplenishReel.customerName}专备`
+                            : '通用共享'}
+                        </span>
+                      ) : undefined
+                    }
+                    quickItemsLabel="快捷点选："
+                    quickItems={availableReelsForReplenish.slice(0, 3).map((r) => ({
+                      key: r.reelId,
+                      label: `${r.reelId} (${r.mpn}${r.customerCode ? ` · ${r.customerCode}` : ''})`,
+                      onClick: () => selectReplenishReel(r.reelId),
+                    }))}
                   />
                   <datalist id="replenish-reel-options">
                     {availableReelsForReplenish.map((r) => (
@@ -214,21 +272,9 @@ export function ReplenishReturnView({
                       </option>
                     ))}
                   </datalist>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {availableReelsForReplenish.slice(0, 3).map((r) => (
-                      <button
-                        key={r.reelId}
-                        type="button"
-                        onClick={() => setRepReelId(r.reelId)}
-                        className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] text-slate-700 hover:bg-slate-100"
-                      >
-                        {r.reelId} ({r.mpn}{r.customerCode ? ` · ${r.customerCode}` : ''})
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label htmlFor="rep-qty" className="block text-xs font-medium text-slate-700">
                       补料数量
@@ -240,7 +286,7 @@ export function ReplenishReturnView({
                       required
                       value={repQty}
                       onChange={(e) => setRepQty(e.target.value)}
-                      className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm text-slate-900 tabular-nums"
+                      className="mt-1.5 min-h-[44px] w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm text-slate-900 tabular-nums focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/15"
                     />
                   </div>
                   <div>
@@ -253,7 +299,7 @@ export function ReplenishReturnView({
                       required
                       value={repStation}
                       onChange={(e) => setRepStation(e.target.value)}
-                      className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                      className="mt-1.5 min-h-[44px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/15"
                     />
                   </div>
                 </div>
@@ -266,7 +312,7 @@ export function ReplenishReturnView({
                     id="rep-reason"
                     value={repReason}
                     onChange={(e) => setRepReason(e.target.value)}
-                    className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1.5 min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/15"
                   >
                     <option value="飞达(Feeder)抛料损耗补料">飞达(Feeder)抛料损耗补料</option>
                     <option value="吸嘴真空异常丢料">吸嘴真空异常丢料</option>
@@ -284,25 +330,14 @@ export function ReplenishReturnView({
                     type="text"
                     value={repOperator}
                     onChange={(e) => setRepOperator(e.target.value)}
-                    className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                    className="mt-1.5 min-h-[44px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/15"
                   />
                 </div>
 
-                {repError && (
-                  <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                    {repError}
-                  </div>
-                )}
-                {repSuccess && (
-                  <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                    <span>{repSuccess}</span>
-                  </div>
-                )}
-
                 <button
                   type="submit"
-                  className="w-full rounded-md bg-sky-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-800"
+                  disabled={!repReelId.trim()}
+                  className="min-h-[48px] w-full rounded-md bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                 >
                   确认补料出库
                 </button>
@@ -311,7 +346,7 @@ export function ReplenishReturnView({
           ) : (
             <>
               <div className="flex items-center gap-2 border-b border-slate-200 pb-4">
-                <RotateCcw className="h-4 w-4 text-emerald-700" />
+                <RotateCcw className="h-4 w-4 text-teal-700" />
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">SMT 产线余料退库</h2>
                   <p className="text-xs text-slate-500">
@@ -329,7 +364,7 @@ export function ReplenishReturnView({
                     id="ret-wo"
                     value={retWo}
                     onChange={(e) => setRetWo(e.target.value)}
-                    className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+                    className="mt-1.5 min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/15"
                   >
                     {activeWos.map((w) => (
                       <option key={w.workOrderId} value={w.workOrderId}>
@@ -340,16 +375,54 @@ export function ReplenishReturnView({
                 </div>
 
                 <div>
-                  <label htmlFor="ret-reel" className="block text-xs font-medium text-slate-700">
-                    扫描退库料盘 UID
-                  </label>
-                  <input
+                  <PdaScanField
                     id="ret-reel"
-                    list="return-reel-options"
+                    inputRef={retScanInputRef}
+                    label="扫描退库料盘 UID"
+                    subtitle="扫线边余料盘 UID 或复合码，自动回填原工单与默认上架库位"
                     value={retReelId}
-                    onChange={(e) => selectReturnReel(e.target.value)}
+                    onChange={selectReturnReel}
+                    list="return-reel-options"
                     placeholder="扫描线边退回料盘 UID..."
-                    className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm text-slate-900"
+                    feedback={
+                      retError
+                        ? { type: 'error', message: retError }
+                        : returnedReel
+                          ? {
+                              type: 'success',
+                              message: (
+                                <>
+                                  退料完成！<strong className="font-mono">{returnedReel.reelId}</strong> 已回库至{' '}
+                                  <strong className="font-mono">{returnedReel.binCode}</strong> (余量{' '}
+                                  {returnedReel.qty})
+                                </>
+                              ),
+                              action: (
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenLabel(returnedReel)}
+                                  className="font-medium text-emerald-900 underline whitespace-nowrap"
+                                >
+                                  打印新标签
+                                </button>
+                              ),
+                            }
+                          : null
+                    }
+                    helperHint={
+                      selectedReturnReel ? (
+                        <span className="font-mono text-[11px] text-slate-500">
+                          {selectedReturnReel.mpn} · 初始 {selectedReturnReel.initialQty} · 已发{' '}
+                          {selectedReturnReel.issuedQty} · 线边余 {selectedReturnReel.qty}
+                        </span>
+                      ) : undefined
+                    }
+                    quickItemsLabel="快捷点选："
+                    quickItems={returnableReels.slice(0, 3).map((r) => ({
+                      key: r.reelId,
+                      label: `${r.reelId} (已发${r.issuedQty})`,
+                      onClick: () => selectReturnReel(r.reelId),
+                    }))}
                   />
                   <datalist id="return-reel-options">
                     {returnableReels.map((r) => (
@@ -358,27 +431,9 @@ export function ReplenishReturnView({
                       </option>
                     ))}
                   </datalist>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {returnableReels.slice(0, 3).map((r) => (
-                      <button
-                        key={r.reelId}
-                        type="button"
-                        onClick={() => selectReturnReel(r.reelId)}
-                        className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] text-slate-700 hover:bg-slate-100"
-                      >
-                        {r.reelId} (已发{r.issuedQty})
-                      </button>
-                    ))}
-                  </div>
-                  {selectedReturnReel && (
-                    <div className="mt-1.5 font-mono text-[11px] text-slate-500">
-                      {selectedReturnReel.mpn} · 初始 {selectedReturnReel.initialQty} · 已发{' '}
-                      {selectedReturnReel.issuedQty} · 线边余 {selectedReturnReel.qty}
-                    </div>
-                  )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label htmlFor="ret-qty" className="block text-xs font-medium text-slate-700">
                       X-Ray点料实退数量
@@ -390,7 +445,7 @@ export function ReplenishReturnView({
                       required
                       value={retQty}
                       onChange={(e) => setRetQty(e.target.value)}
-                      className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm text-slate-900 tabular-nums"
+                      className="mt-1.5 min-h-[44px] w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm text-slate-900 tabular-nums focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/15"
                     />
                   </div>
 
@@ -402,7 +457,7 @@ export function ReplenishReturnView({
                       id="ret-bin"
                       value={retBin}
                       onChange={(e) => setRetBin(e.target.value)}
-                      className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+                      className="mt-1.5 min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/15"
                     >
                       {state.bins
                         .filter((b) => b.zone !== '产线暂存区')
@@ -415,12 +470,12 @@ export function ReplenishReturnView({
                   </div>
                 </div>
 
-                <label className="flex items-start gap-2.5 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs">
+                <label className="flex items-start gap-2.5 rounded-md border border-slate-200 bg-[#f8fafb] p-3 text-xs">
                   <input
                     type="checkbox"
                     checked={splitChildReel}
                     onChange={(e) => setSplitChildReel(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-700"
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
                   />
                   <span>
                     <strong className="text-slate-900">分拆生成子UID料盘</strong>
@@ -439,36 +494,14 @@ export function ReplenishReturnView({
                     type="text"
                     value={retReason}
                     onChange={(e) => setRetReason(e.target.value)}
-                    className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                    className="mt-1.5 min-h-[44px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/15"
                   />
                 </div>
 
-                {retError && (
-                  <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                    {retError}
-                  </div>
-                )}
-
-                {returnedReel && (
-                  <div className="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800">
-                    <span>
-                      退料完成！<strong className="font-mono">{returnedReel.reelId}</strong> 已回库至{' '}
-                      <strong className="font-mono">{returnedReel.binCode}</strong> (余量{' '}
-                      {returnedReel.qty})
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onOpenLabel(returnedReel)}
-                      className="font-medium text-emerald-900 underline whitespace-nowrap"
-                    >
-                      打印新标签
-                    </button>
-                  </div>
-                )}
-
                 <button
                   type="submit"
-                  className="w-full rounded-md bg-sky-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-800"
+                  disabled={!retReelId.trim()}
+                  className="min-h-[48px] w-full rounded-md bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                 >
                   确认余料点数退库
                 </button>
@@ -477,17 +510,21 @@ export function ReplenishReturnView({
           )}
         </section>
 
-        {/* Right: Recent Replenish & Return History */}
-        <section className="rounded-lg border border-slate-200 bg-white xl:col-span-7">
+        {/* Right: Recent History */}
+        <section className="mes-panel xl:col-span-7">
           <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="text-base font-semibold text-slate-900">产线补料与退料实时流水</h2>
+            <h2 className="text-base font-semibold text-slate-900">
+              {isReplenish ? '产线补料实时流水' : '产线余料退库实时流水'}
+            </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              实时记录工单额外损耗补料与完工/换线退库明细，自动关联单据与机台站位
+              {isReplenish
+                ? '实时记录工单额外损耗补料明细，自动关联单据与机台站位'
+                : '实时记录完工/换线退库明细与分拆子UID回库记录'}
             </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+              <thead className="border-b border-slate-200 bg-[#f8fafb] text-slate-500">
                 <tr>
                   <th className="px-5 py-2.5 font-medium whitespace-nowrap">时间</th>
                   <th className="px-4 py-2.5 font-medium whitespace-nowrap">类型</th>

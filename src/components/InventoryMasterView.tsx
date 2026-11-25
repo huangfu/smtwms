@@ -236,7 +236,7 @@ export function InventoryMasterView({
             onClick={() => setTab(item.id as typeof tab)}
             className={`rounded-md px-3.5 py-1.5 text-xs whitespace-nowrap shrink-0 ${
               tab === item.id
-                ? 'bg-white font-semibold text-sky-800 shadow-sm border border-slate-200/80'
+                ? 'bg-white font-semibold text-teal-800 shadow-sm border border-slate-200/80'
                 : 'font-medium text-slate-600 hover:text-slate-900 border border-transparent'
             }`}
           >
@@ -336,7 +336,7 @@ export function InventoryMasterView({
                           <button
                             type="button"
                             onClick={() => onOpenLabel(r)}
-                            className="inline-flex items-center gap-1 font-medium text-sky-700 hover:text-sky-800"
+                            className="inline-flex items-center gap-1 font-medium text-teal-700 hover:text-teal-800"
                           >
                             <Barcode className="h-3.5 w-3.5" />
                             标签
@@ -442,7 +442,7 @@ export function InventoryMasterView({
                   <button
                     type="button"
                     onClick={() => handleApplyBomTemplate(selectedBomId)}
-                    className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-sky-700 hover:bg-slate-100 whitespace-nowrap"
+                    className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-teal-700 hover:bg-slate-100 whitespace-nowrap"
                   >
                     载入BOM
                   </button>
@@ -597,7 +597,7 @@ export function InventoryMasterView({
 
               <button
                 type="submit"
-                className="w-full rounded-md bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-800"
+                className="w-full rounded-md bg-teal-700 px-4 py-2 text-xs font-medium text-white hover:bg-teal-800"
               >
                 创建独立生产工单
               </button>
@@ -619,7 +619,7 @@ export function InventoryMasterView({
                       <span className="mx-2 text-slate-300">·</span>
                       <span className="font-medium text-slate-800">{wo.productName}</span>
                     </div>
-                    <span className="font-medium text-sky-700">
+                    <span className="font-medium text-teal-700">
                       {WORK_ORDER_STATUS_LABEL[wo.status]}
                     </span>
                   </div>

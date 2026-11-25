@@ -1,8 +1,8 @@
 import { Download, FileSpreadsheet, Plus, Trash2, Upload } from 'lucide-react';
 import { useState } from 'react';
 import type { AsnOrder, WmsState } from '../types/wms';
-import { ASN_STATUS_LABEL, formatTime } from '../utils/formatters';
-import { parseAsnCsv } from '../utils/wmsLogic';
+import { ASN_STAGE_META, ASN_STATUS_LABEL, formatTime } from '../utils/formatters';
+import { deriveAsnWorkflowStage, parseAsnCsv } from '../utils/wmsLogic';
 
 interface AsnManagerPanelProps {
   state: WmsState;
@@ -28,7 +28,6 @@ interface AsnManagerPanelProps {
     notes?: string;
   }) => Promise<AsnOrder>;
   onCancelAsn: (asnNo: string) => Promise<void>;
-  onReceiveAsn: (asn: AsnOrder, lineId?: string) => void;
 }
 
 const SAMPLE_CSV = `PO号,供应商,预计到货日,SKU/MPN,数量,批次Lot,周期DateCode,建议库位
@@ -40,7 +39,6 @@ export function AsnManagerPanel({
   onCreateAsn,
   onImportAsnCsv,
   onCancelAsn,
-  onReceiveAsn,
 }: AsnManagerPanelProps) {
   const [createMode, setCreateMode] = useState<'manual' | 'upload'>('manual');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'COMPLETED'>('ALL');
@@ -134,7 +132,7 @@ export function AsnManagerPanel({
         notes,
         lines: draftLines,
       });
-      setMsg(`已手动生成收料通知单 ${asn.asnNo}（共 ${asn.lines.length} 行物料）`);
+      setMsg(`已发布采购预约单 ${asn.asnNo}（共 ${asn.lines.length} 行物料），已自动推送至仓库「待收料清单」`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '创建ASN失败');
     } finally {
@@ -173,7 +171,7 @@ export function AsnManagerPanel({
         purchaser: csvPurchaser,
         notes: csvNotes,
       });
-      setMsg(`采购CSV已导入并生成收料单 ${asn.asnNo}（${asn.supplierName}）`);
+      setMsg(`采购 CSV 已导入并下发 ${asn.asnNo}（${asn.supplierName}），已自动推送至仓库「待收料清单」`);
       setCsvText('');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'CSV导入ASN失败');
@@ -195,10 +193,10 @@ export function AsnManagerPanel({
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
           <div>
             <h2 className="text-base font-semibold text-slate-900">
-              采购 ASN 收料预约制单
+              采购 ASN 到货预约与下发
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              支持采购上传CSV送货清单或仓库手动开立ASN预约到货单
+              采购部专用：录入采购到货预约或上传供应商 CSV 送货清单，下发后自动推送至仓库待收料清单
             </p>
           </div>
         </div>
@@ -213,7 +211,7 @@ export function AsnManagerPanel({
             }}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs whitespace-nowrap shrink-0 ${
               createMode === 'manual'
-                ? 'bg-white font-semibold text-sky-800 shadow-sm border border-slate-200/80'
+                ? 'bg-white font-semibold text-teal-800 shadow-sm border border-slate-200/80'
                 : 'font-medium text-slate-600 hover:text-slate-900 border border-transparent'
             }`}
           >
@@ -229,7 +227,7 @@ export function AsnManagerPanel({
             }}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs whitespace-nowrap shrink-0 ${
               createMode === 'upload'
-                ? 'bg-white font-semibold text-sky-800 shadow-sm border border-slate-200/80'
+                ? 'bg-white font-semibold text-teal-800 shadow-sm border border-slate-200/80'
                 : 'font-medium text-slate-600 hover:text-slate-900 border border-transparent'
             }`}
           >
@@ -327,7 +325,7 @@ export function AsnManagerPanel({
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="如 加急件/需IQC全检"
+                  placeholder="如 加急件/预约到货月台时段"
                   className="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900"
                 />
               </div>
@@ -343,9 +341,10 @@ export function AsnManagerPanel({
                   onChange={(e) => setDraftSku(e.target.value)}
                   className="col-span-7 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs"
                 >
-                  {state.materials.map((m) => (
-                    <option key={m.skuCode} value={m.skuCode}>
-                      {m.mpn} ({m.skuCode})
+                  {state.materials.map((m, idx) => (
+                    <option key={m.materialKey ?? `${m.skuCode}-${idx}`} value={m.skuCode}>
+                      {m.mpn} ({m.skuCode}
+                      {m.ownerName ? ` · ${m.ownerName}` : ''})
                     </option>
                   ))}
                 </select>
@@ -440,7 +439,7 @@ export function AsnManagerPanel({
             <button
               type="submit"
               disabled={submitting || draftLines.length === 0}
-              className="w-full rounded-md bg-sky-700 px-4 py-2.5 text-xs font-medium text-white hover:bg-sky-800 disabled:opacity-50"
+              className="w-full rounded-md bg-teal-700 px-4 py-2.5 text-xs font-medium text-white hover:bg-teal-800 disabled:opacity-50"
             >
               {submitting ? '正在生成ASN...' : '生成收料预约 ASN 单'}
             </button>
@@ -449,7 +448,7 @@ export function AsnManagerPanel({
           <form onSubmit={handleImportCsvSubmit} className="mt-4 space-y-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
               <div className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
-                <FileSpreadsheet className="h-4 w-4 text-sky-700" />
+                <FileSpreadsheet className="h-4 w-4 text-teal-700" />
                 采购送货单 CSV 上传或粘贴
               </div>
               <div className="flex items-center gap-3">
@@ -464,7 +463,7 @@ export function AsnManagerPanel({
                 <button
                   type="button"
                   onClick={() => setCsvText(SAMPLE_CSV)}
-                  className="text-xs font-medium text-sky-700 hover:text-sky-800 whitespace-nowrap"
+                  className="text-xs font-medium text-teal-700 hover:text-teal-800 whitespace-nowrap"
                 >
                   填入采购示例CSV
                 </button>
@@ -529,7 +528,7 @@ export function AsnManagerPanel({
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
                 placeholder={SAMPLE_CSV}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-[11px] text-slate-900 focus:border-sky-600 focus:outline-none"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-[11px] text-slate-900 focus:border-teal-600 focus:outline-none"
               />
             </div>
 
@@ -586,7 +585,7 @@ export function AsnManagerPanel({
             <button
               type="submit"
               disabled={submitting || !csvPreview}
-              className="w-full rounded-md bg-sky-700 px-4 py-2.5 text-xs font-medium text-white hover:bg-sky-800 disabled:opacity-50"
+              className="w-full rounded-md bg-teal-700 px-4 py-2.5 text-xs font-medium text-white hover:bg-teal-800 disabled:opacity-50"
             >
               {submitting ? '正在导入ASN...' : '确认导入采购ASN收料单'}
             </button>
@@ -599,10 +598,10 @@ export function AsnManagerPanel({
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
             <h2 className="text-base font-semibold text-slate-900">
-              收料 ASN 通知单台账 ({filteredAsns.length} 单)
+              采购 ASN 预约台账与履约跟踪 ({filteredAsns.length} 单)
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              点击“按此ASN收料”将自动回填物料、供应商与预约数量进入扫码赋码入库流程
+              采购下发后自动同步至仓库「待收料清单」，此处实时跟踪仓库初收、IQC 检验与入库进度（只读）
             </p>
           </div>
           <div className="inline-flex items-center gap-1 rounded-md bg-slate-100 p-1">
@@ -617,7 +616,7 @@ export function AsnManagerPanel({
                 onClick={() => setStatusFilter(t.id as typeof statusFilter)}
                 className={`rounded px-2.5 py-1 text-xs whitespace-nowrap ${
                   statusFilter === t.id
-                    ? 'bg-white font-semibold text-sky-800 shadow-sm border border-slate-200/80'
+                    ? 'bg-white font-semibold text-teal-800 shadow-sm border border-slate-200/80'
                     : 'font-medium text-slate-600 hover:text-slate-900 border border-transparent'
                 }`}
               >
@@ -635,6 +634,7 @@ export function AsnManagerPanel({
           ) : (
             filteredAsns.map((asn) => {
               const st = ASN_STATUS_LABEL[asn.status];
+              const stageMeta = ASN_STAGE_META[deriveAsnWorkflowStage(asn)];
               const wh = state.warehouses.find((w) => w.warehouseCode === asn.warehouseCode);
               const totalExp = asn.lines.reduce((s, l) => s + l.expectedQty, 0);
               const totalRec = asn.lines.reduce((s, l) => s + l.receivedQty, 0);
@@ -651,6 +651,14 @@ export function AsnManagerPanel({
                         </span>
                         <span className="text-slate-300">·</span>
                         <span className={`font-semibold ${st.toneClass}`}>{st.label}</span>
+                        {asn.status !== 'CANCELLED' && (
+                          <>
+                            <span className="text-slate-300">·</span>
+                            <span className={`font-medium ${stageMeta.toneClass}`}>
+                              第{stageMeta.step}步 {stageMeta.label}
+                            </span>
+                          </>
+                        )}
                         <span className="text-slate-300">·</span>
                         <span className="text-slate-500">
                           {asn.source === 'UPLOAD_CSV' ? '采购CSV上传' : '手动开立'}
@@ -671,23 +679,14 @@ export function AsnManagerPanel({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      {isOpen && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => onReceiveAsn(asn)}
-                            className="rounded-md bg-sky-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-800 whitespace-nowrap"
-                          >
-                            按此ASN收料
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onCancelAsn(asn.asnNo)}
-                            className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 whitespace-nowrap"
-                          >
-                            作废
-                          </button>
-                        </>
+                      {isOpen && totalRec === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => onCancelAsn(asn.asnNo)}
+                          className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 whitespace-nowrap"
+                        >
+                          撤回作废
+                        </button>
                       )}
                     </div>
                   </div>
@@ -697,17 +696,17 @@ export function AsnManagerPanel({
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
                       <div
                         className={`h-full ${
-                          asn.status === 'COMPLETED' ? 'bg-emerald-600' : 'bg-sky-600'
+                          asn.status === 'COMPLETED' ? 'bg-emerald-600' : 'bg-teal-600'
                         }`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
                     <span className="font-mono text-[11px] text-slate-600 tabular-nums whitespace-nowrap">
-                      已收 {totalRec.toLocaleString()} / 预约 {totalExp.toLocaleString()} ({pct}%)
+                      仓库已初收 {totalRec.toLocaleString()} / 预约 {totalExp.toLocaleString()} ({pct}%)
                     </span>
                   </div>
 
-                  {/* Lines table */}
+                  {/* Lines table (Read-only execution tracking for Procurement) */}
                   <div className="mt-3 overflow-x-auto rounded border border-slate-200">
                     <table className="w-full text-left text-xs">
                       <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
@@ -715,13 +714,36 @@ export function AsnManagerPanel({
                           <th className="px-3 py-2 font-medium whitespace-nowrap">物料 MPN / SKU</th>
                           <th className="px-3 py-2 font-medium whitespace-nowrap">预填批号/周期</th>
                           <th className="px-3 py-2 font-medium whitespace-nowrap">建议库位</th>
-                          <th className="px-3 py-2 font-medium text-right whitespace-nowrap">已收 / 预约</th>
-                          <th className="px-3 py-2 font-medium text-right whitespace-nowrap">操作</th>
+                          <th className="px-3 py-2 font-medium text-right whitespace-nowrap">已初收 / 预约</th>
+                          <th className="px-3 py-2 font-medium text-right whitespace-nowrap">下游流转状态</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {asn.lines.map((line) => {
                           const rem = Math.max(0, line.expectedQty - line.receivedQty);
+                          const passed = line.iqcPassedQty ?? 0;
+                          const rejected = line.iqcRejectedQty ?? 0;
+                          const putaway = line.putawayQty ?? 0;
+                          let statusNode = (
+                            <span className="text-slate-500 font-medium">待仓库初收 (余{rem})</span>
+                          );
+                          if (rem === 0 && passed === 0 && rejected === 0) {
+                            statusNode = (
+                              <span className="text-amber-700 font-medium">已通知 IQC 待检</span>
+                            );
+                          } else if (rejected > 0 && passed === 0) {
+                            statusNode = (
+                              <span className="text-red-700 font-medium">IQC 不良退供 ({rejected})</span>
+                            );
+                          } else if (passed > 0 && putaway < passed) {
+                            statusNode = (
+                              <span className="text-teal-700 font-medium">IQC 已放行 · 待入库</span>
+                            );
+                          } else if (passed > 0 && putaway >= passed) {
+                            statusNode = (
+                              <span className="text-emerald-700 font-medium">已入库 ({putaway})</span>
+                            );
+                          }
                           return (
                             <tr key={line.lineId} className="hover:bg-slate-50">
                               <td className="px-3 py-2">
@@ -744,17 +766,7 @@ export function AsnManagerPanel({
                                 </span>
                               </td>
                               <td className="px-3 py-2 text-right whitespace-nowrap">
-                                {isOpen && rem > 0 ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => onReceiveAsn(asn, line.lineId)}
-                                    className="font-medium text-sky-700 hover:underline"
-                                  >
-                                    收料 (余{rem})
-                                  </button>
-                                ) : (
-                                  <span className="text-emerald-700 font-medium">已收齐</span>
-                                )}
+                                {statusNode}
                               </td>
                             </tr>
                           );

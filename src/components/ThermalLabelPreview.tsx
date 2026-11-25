@@ -300,11 +300,11 @@ export function ThermalLabelPreview({
                       className={`absolute select-none ${
                         isLine ? 'bg-slate-900' : 'border-slate-900 bg-transparent'
                       } ${interactive ? 'cursor-move' : ''} ${
-                        isSelected ? 'z-20 ring-2 ring-sky-600' : ''
+                        isSelected ? 'z-20 ring-2 ring-teal-600' : ''
                       }`}
                     >
                       {isSelected && (
-                        <span className="pointer-events-none -top-4 left-0 absolute whitespace-nowrap rounded bg-sky-700 px-1 py-0.5 font-mono text-[8px] text-white">
+                        <span className="pointer-events-none -top-4 left-0 absolute whitespace-nowrap rounded bg-teal-700 px-1 py-0.5 font-mono text-[8px] text-white">
                           X:{el.xMm} Y:{el.yMm}mm (^FO{mmToDots(el.xMm, dpi)},{mmToDots(el.yMm, dpi)})
                         </span>
                       )}
@@ -348,14 +348,14 @@ export function ThermalLabelPreview({
                           interactive ? 'cursor-move rounded-sm transition-shadow' : ''
                         } ${
                           isSelected
-                            ? 'z-20 bg-sky-50/75 ring-1 ring-sky-600'
+                            ? 'z-20 bg-teal-50/75 ring-1 ring-teal-600'
                             : interactive
-                            ? 'hover:ring-1 hover:ring-sky-300'
+                            ? 'hover:ring-1 hover:ring-teal-300'
                             : ''
                         }`}
                       >
                         {isSelected && (
-                          <span className="pointer-events-none -top-4 left-0 absolute whitespace-nowrap rounded bg-sky-700 px-1 py-0.5 font-mono text-[8px] text-white">
+                          <span className="pointer-events-none -top-4 left-0 absolute whitespace-nowrap rounded bg-teal-700 px-1 py-0.5 font-mono text-[8px] text-white">
                             X:{el.xMm} Y:{el.yMm}mm (^FO{mmToDots(el.xMm, dpi)},{mmToDots(el.yMm, dpi)})
                           </span>
                         )}
@@ -433,7 +433,7 @@ export function ThermalLabelPreview({
                               ? 'bg-slate-950 text-white px-1 py-0.5'
                               : 'text-slate-900'
                           } ${
-                            isSelected ? 'z-20 ring-1 ring-dashed ring-sky-500' : ''
+                            isSelected ? 'z-20 ring-1 ring-dashed ring-teal-500' : ''
                           }`}
                         >
                           {hri.text}
@@ -464,14 +464,14 @@ export function ThermalLabelPreview({
                       interactive ? 'cursor-move rounded-sm px-0.5 transition-shadow' : ''
                     } ${
                       isSelected
-                        ? 'z-20 bg-sky-50/75 ring-1 ring-sky-600'
+                        ? 'z-20 bg-teal-50/75 ring-1 ring-teal-600'
                         : interactive
-                        ? 'hover:ring-1 hover:ring-sky-300'
+                        ? 'hover:ring-1 hover:ring-teal-300'
                         : ''
                     }`}
                   >
                     {isSelected && (
-                      <span className="pointer-events-none -top-4 left-0 absolute whitespace-nowrap rounded bg-sky-700 px-1 py-0.5 font-mono text-[8px] text-white">
+                      <span className="pointer-events-none -top-4 left-0 absolute whitespace-nowrap rounded bg-teal-700 px-1 py-0.5 font-mono text-[8px] text-white">
                         X:{el.xMm} Y:{el.yMm}mm (^FO{mmToDots(el.xMm, dpi)},{mmToDots(el.yMm, dpi)})
                       </span>
                     )}
