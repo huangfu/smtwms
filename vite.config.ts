@@ -29,7 +29,11 @@ export default defineConfig(() => {
       },
     ],
     resolve: {
+      dedupe: ['react', 'react-dom'],
       alias: {
+        '@client': path.resolve(__dirname, 'web/client'),
+        '@server': path.resolve(__dirname, 'web/server'),
+        '@shared': path.resolve(__dirname, 'web/shared'),
         '@': path.resolve(__dirname, '.'),
       },
     },

@@ -17,12 +17,13 @@
     "allowJs": true,
     "jsx": "react-jsx",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@client/*": ["./web/client/*"],
+      "@server/*": ["./web/server/*"],
+      "@shared/*": ["./web/shared/*"],
+      "@/*": ["./*"]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "exclude": ["dist"]
+  "exclude": ["dist", "backend-dotnet", "node_modules", "scripts"]
 }

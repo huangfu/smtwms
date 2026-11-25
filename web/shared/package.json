@@ -1,0 +1,10 @@
+{
+  "name": "@smt-wms/shared",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "SMT-WMS 前后端共享纯领域层（类型定义、业务规则引擎、RBAC 权限矩阵、ZPL 指令引擎）",
+  "scripts": {
+    "test": "tsx --test domain/*.test.ts"
+  }
+}
